@@ -90,6 +90,18 @@ function Installer:NewChoices(layoutKey)
         -- when you log in, the plan is what happens when you zone.
         autoSwitch = Layouts:AutoSwitchFor(key),
         autoSwitchTouched = false,
+        -- Put each module back to its own defaults before the layout goes on.
+        --
+        -- On by default, because the thing people mean by "run the installer
+        -- again" is "give me the clean result", not "merge this over whatever I
+        -- have accumulated". Without it a layout only overwrites the settings it
+        -- happens to name, and everything it stays quiet about - a font size
+        -- changed in March, a bisect mode left switched on - survives and makes
+        -- the result look like the installer half-worked.
+        --
+        -- It is a checkbox rather than a rule because it is the one genuinely
+        -- destructive thing in here: settings made outside the pack go too.
+        resetFirst = true,
         modules = {},
         recommendedGraphics = layout.graphics,
     }
@@ -144,9 +156,20 @@ function Installer:Preview(choices)
                 }
             else
                 local has = layout and layout.overrides and layout.overrides[module.key]
+                local detail
+                if choices.resetFirst and has then
+                    detail = "reset, then styled for " .. layout.name
+                elseif choices.resetFirst then
+                    detail = "reset to its own defaults"
+                elseif has then
+                    detail = "on, styled for " .. layout.name
+                else
+                    detail = "on, left at its own settings"
+                end
+
                 lines[#lines + 1] = {
                     label = module.label,
-                    detail = has and ("on, styled for " .. layout.name) or "on, left at its own settings",
+                    detail = detail,
                     ok = true,
                 }
             end
@@ -249,6 +272,18 @@ function Installer:Apply(choices)
             result.skipped[#result.skipped + 1] = module.label
         else
             local wanted = choices.modules[module.key] and true or false
+
+            -- Reset first of all, when asked - but only for modules being kept.
+            -- Switching something off means "stop drawing this", not "throw away
+            -- how I had it set up"; wiping the settings of a module on its way
+            -- out is gratuitous and unrecoverable.
+            --
+            -- It has to come before the toggle as well as before the layout: a
+            -- reset restores the module's own default for its enabled flag,
+            -- which would otherwise undo the choice made two screens back.
+            if wanted and choices.resetFirst then
+                Modules:Reset(module)
+            end
 
             -- Order matters: the toggle first, then the layout. Turning unit
             -- frames on switches every frame's `enabled` back to true, so a

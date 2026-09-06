@@ -630,7 +630,24 @@ Steps.list.review = {
             y = y - 25
         end
 
-        y = y - 6
+        y = y - 4
+
+        local reset = W:CreateCheckbox(page, "Reset each module first", {
+            checked = choices.resetFirst ~= false,
+            description = "Puts every module back to its own defaults before the " ..
+                          "layout goes on, so nothing from an earlier setup survives. " ..
+                          "Settings you made outside the pack go too.",
+            width = width - 8,
+            onChange = function(checked)
+                choices.resetFirst = checked
+                -- The summary above describes what will happen, so it has to be
+                -- redrawn rather than left describing the other answer.
+                PUI.Wizard:Render()
+            end,
+        })
+        reset:SetPoint("TOPLEFT", 0, y)
+        y = y - 46
+
         local _, ruleY = W:CreateSeparator(page, 0, y, width)
         y = ruleY - 4
 

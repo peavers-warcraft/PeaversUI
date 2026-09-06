@@ -193,6 +193,19 @@ function Preview:Start(layoutKey, choices)
     plan.autoSwitch = nil
     plan.isPreview = true
 
+    -- Never reset while previewing, even when the install is going to.
+    --
+    -- The snapshot above records the current value of every key the layout is
+    -- about to write, and nothing else - which is exactly enough to undo a
+    -- layout and nowhere near enough to undo a reset. Resetting here would give
+    -- back an undo that quietly did not.
+    --
+    -- The cost is a visible difference: a preview shows the layout over your
+    -- current settings, while installing additionally clears what the layout
+    -- does not mention. The review screen says which of the two it is doing, so
+    -- the difference is stated rather than discovered.
+    plan.resetFirst = false
+
     PUI.Installer:Apply(plan)
 
     return true

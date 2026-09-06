@@ -34,6 +34,14 @@ Runs once, on your first login after installing, and never again unless you ask 
 4. **Graphics.** A baseline preset, and a plan for switching between presets by content. The one screen that changes the game rather than the interface, so it gets a screen of its own and an explicit yes.
 5. **A summary you have to agree to.**
 
+### Running it again
+
+Re-running the installer gives you the clean result, not a merge onto whatever you have accumulated. Each module you keep is reset to its own defaults first, then the layout goes on top.
+
+That matters because a layout only names the settings it cares about. Without the reset, everything it stays quiet about survives — a font size changed in March, a stray key from a version two releases back, a diagnostic mode left switched on — and the result looks like the installer half-worked.
+
+Two deliberate limits. A module you switch **off** is not reset: turning something off means stop drawing it, not throw away how you had it set up. And it is a checkbox on the summary screen, not a rule, because it is the one genuinely destructive thing in here — settings you made outside the pack go too.
+
 **Backing out changes nothing.** The module and graphics screens only edit a plan. The layout screen does change your interface as you click — that is the point of it — but closing the installer without finishing puts every one of those settings back exactly. Either way, walking away leaves the game as it was found.
 
 ### Trying a layout on
@@ -88,7 +96,7 @@ Negative claims rot quietly, so it is measured rather than asserted. The table b
 
 | Check | Measured | Budget | |
 |---|---:|---:|:--:|
-| Packaged size | 145.5 KB | 165 KB | pass |
+| Packaged size | 149.4 KB | 165 KB | pass |
 | Bundled libraries | 0 | 0 | pass |
 | Widget calls per frame | 0 | 0 | pass |
 | Widget calls per second while idle | 0 | 0 | pass |
@@ -97,12 +105,12 @@ Scenarios driven against the real addon source, outside the game:
 
 | Scenario | Calls/frame | Notes |
 |---|---:|---|
-| installing the pack, four modules and a graphics preset | 0.00 | 26 calls into the module addons for the whole install, 0 frames created; happens once |
+| installing the pack, four modules and a graphics preset | 0.00 | 30 calls into the module addons for the whole install, 0 frames created; happens once |
 | idle, after installing | 0.00 | no OnUpdate, no ticker, no combat events: the pack does nothing at all once the installer has closed |
 | layout data checked against the module settings | 0.00 | 4 layouts, 226 module blocks verified key by key |
 | live preview applied and undone | 0.00 | every setting restored exactly, including keys the layout created that did not exist before |
 
-<sub>3,756 lines of Lua · 145.5 KB packaged · no bundled libraries</sub>
+<sub>3,839 lines of Lua · 149.4 KB packaged · no bundled libraries</sub>
 
 <!-- perf:end -->
 

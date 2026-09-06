@@ -32,6 +32,10 @@
 --   * A "none" baseline switches auto-switch off, because leave-my-graphics-
 --     alone has to mean alone - but a layout-only apply, which never asked the
 --     question, must not touch any of it.
+--   * Re-running gives a clean result. Each kept module is reset to its own
+--     defaults before the layout goes on, so nothing from an earlier setup
+--     survives - and a module being switched off is NOT reset, because that
+--     would throw away settings on the way out.
 --   * The live preview round-trips exactly. Undo has to restore every setting
 --     the layout wrote AND remove the ones it created, or a preview somebody
 --     rejected leaves pieces of itself behind.
@@ -159,12 +163,34 @@ local COMMON_DEFAULTS = {
 }
 
 local function FakeConfig(defaults)
-    local config = DeepCopy(COMMON_DEFAULTS)
+    local seed = DeepCopy(COMMON_DEFAULTS)
     for key, value in pairs(DeepCopy(defaults)) do
-        config[key] = value
+        seed[key] = value
     end
+
+    local config = DeepCopy(seed)
+    config.defaults = seed
     config.saves = 0
     function config:Save() self.saves = self.saves + 1 Hop() return true end
+
+    -- Mirrors the real ConfigManager Reset: defaults deep-copied back, and any
+    -- key the defaults do not mention dropped. Both halves matter - a Reset that
+    -- assigned table defaults by reference, or that left stray keys behind, is
+    -- exactly the bug this fixture would otherwise fail to notice.
+    function config:Reset()
+        for key, value in pairs(self) do
+            if type(value) ~= "function" and key ~= "defaults" and key ~= "saves"
+                and self.defaults[key] == nil then
+                self[key] = nil
+            end
+        end
+        for key, value in pairs(self.defaults) do
+            self[key] = DeepCopy(value)
+        end
+        self:Save()
+        return true
+    end
+
     return config
 end
 
@@ -728,6 +754,74 @@ assert(PUI.Config.previewRestore == nil, "keep must clear the outstanding restor
 assert(PUF.Config.units.player.x == -300, "keep must leave the previewed layout in place")
 
 --------------------------------------------------------------------------------
+-- Re-running the installer gives a clean result
+--
+-- The reason this exists: an install that only deep-merges the layout leaves
+-- every setting the layout does not happen to name exactly as it found it. A
+-- font size changed in March, a bisect mode left switched on, a stray key from
+-- a version two releases back - all of it survives, and the result looks like
+-- the installer half-worked. Which is what happened.
+--
+-- So the fixture is deliberately messed up first, in three different ways, and
+-- the install has to come out clean.
+--------------------------------------------------------------------------------
+
+PMM.Config.size = 999                       -- a setting the layout does name
+PMM.Config.buttonSpacing = 77               -- one it does not
+PMM.Config.strayKeyFromOldVersion = true    -- a key the defaults never had
+PTT.Config.scale = 1.6                      -- another the layout does not name
+PSB.Config.barAlpha = 0.42                  -- systembars, not named by Standard
+
+local cleanChoices = Installer:NewChoices("standard")
+assert(cleanChoices.resetFirst == true,
+    "re-running should default to a clean result, not a merge onto old state")
+cleanChoices.graphicsPreset = "none"
+cleanChoices.autoSwitch = nil
+Installer:Apply(cleanChoices)
+
+assert(PMM.Config.size == 155, "the layout should still win over the reset")
+assert(PMM.Config.buttonSpacing == 2,
+    "a setting the layout does not name must go back to the module default, got "
+    .. tostring(PMM.Config.buttonSpacing))
+assert(PMM.Config.strayKeyFromOldVersion == nil,
+    "a key the module no longer has must not survive a reset")
+assert(PTT.Config.scale == 1.0, "tooltip scale should be back at its default")
+assert(PSB.Config.barAlpha == 1.0, "system bar alpha should be back at its default, got "
+    .. tostring(PSB.Config.barAlpha))
+
+-- And with the box unticked it is a merge again, which is the whole point of it
+-- being a box.
+PTT.Config.scale = 1.6
+local mergeChoices = Installer:NewChoices("standard")
+mergeChoices.resetFirst = false
+mergeChoices.graphicsPreset = "none"
+mergeChoices.autoSwitch = nil
+Installer:Apply(mergeChoices)
+assert(PTT.Config.scale == 1.0,
+    "the standard layout names tooltip scale, so it is written either way")
+PTT.Config.fontSize = 21
+Installer:Apply(mergeChoices)
+assert(PTT.Config.fontSize == 12,
+    "standard names fontSize too")
+-- cursorOffsetX is a good probe precisely because the Standard layout has no
+-- opinion about it: it parks tooltips, so the cursor offsets never come up.
+PTT.Config.cursorOffsetX = 19
+Installer:Apply(mergeChoices)
+assert(PTT.Config.cursorOffsetX == 19,
+    "without a reset, a setting the layout does not name must be left alone")
+
+-- Switching a module off must not wipe it. Turning something off means stop
+-- drawing it, not throw away how it was set up.
+local offChoices = Installer:NewChoices("standard")
+offChoices.modules.tooltip = false
+offChoices.graphicsPreset = "none"
+offChoices.autoSwitch = nil
+PTT.Config.cursorOffsetX = 19
+Installer:Apply(offChoices)
+assert(PTT.Config.cursorOffsetX == 19,
+    "a module being switched off must not be reset out from under the player")
+
+--------------------------------------------------------------------------------
 -- A module that will override the layout says so
 --
 -- PeaversChat has bisect modes that take features away and stash the real
@@ -758,16 +852,31 @@ PCHAT.Config.minimalBackup = { styleTabs = true }
 warning = Modules:Warn(chatModule)
 assert(warning and warning:find("minimal"), "minimal mode must be reported: " .. tostring(warning))
 
--- And it has to reach the install result, not just the helper.
+-- It has to reach the install result, not just the helper - but only on the
+-- merge path. A reset clears the backup along with everything else, which is
+-- the whole reason a clean re-run fixes this rather than reporting it.
 PCHAT.Config.minimalBackup = {}
 PCHAT.Config.withoutBackup = { showSocialButton = false }
-local warnChoices = Installer:NewChoices("standard")
-warnChoices.graphicsPreset = "none"
-warnChoices.autoSwitch = nil
-local warnResult = Installer:Apply(warnChoices)
+
+local mergeWarn = Installer:NewChoices("standard")
+mergeWarn.resetFirst = false
+mergeWarn.graphicsPreset = "none"
+mergeWarn.autoSwitch = nil
+local warnResult = Installer:Apply(mergeWarn)
 assert(#warnResult.warnings == 1 and warnResult.warnings[1]:find("Chat is in"),
-    "the install result must carry the warning")
+    "merging under a bisect mode must be reported")
 assert(#warnResult.failures == 0, "a bisect mode is not a failure")
+
+-- Now the clean path: the same mess, reset on, and it simply goes away.
+PCHAT.Config.withoutBackup = { showSocialButton = false }
+local cleanWarn = Installer:NewChoices("standard")
+cleanWarn.graphicsPreset = "none"
+cleanWarn.autoSwitch = nil
+local cleanResult = Installer:Apply(cleanWarn)
+assert(next(PCHAT.Config.withoutBackup) == nil,
+    "a reset must clear the bisect backup")
+assert(#cleanResult.warnings == 0,
+    "nothing left to warn about once the module has been reset")
 
 _G.PeaversChat = nil
 

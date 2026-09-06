@@ -398,6 +398,24 @@ function Modules:Refresh(module)
     return ok
 end
 
+-- Put a module back to its own defaults, wiping whatever an earlier setup, a
+-- bisect mode or a season of tinkering left behind.
+--
+-- Deliberately the module's own Reset rather than anything of ours: it knows
+-- which of its settings are settings and which are bookkeeping, and for the
+-- profile-backed modules it is AceDB's ResetProfile, which is the only correct
+-- answer. The pack has no business inventing a second idea of "default".
+function Modules:Reset(module)
+    local config = self:ConfigOf(module)
+    if not config or type(config.Reset) ~= "function" then return false end
+
+    local ok, err = pcall(config.Reset, config)
+    if not ok then
+        failures[#failures + 1] = module.folder .. " reset: " .. tostring(err)
+    end
+    return ok
+end
+
 -- A reason this module will not do what the layout says, or nil when there is
 -- none. Modules opt in by declaring Warn; most have nothing to say.
 function Modules:Warn(module)
