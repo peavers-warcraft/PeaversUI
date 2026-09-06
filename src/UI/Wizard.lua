@@ -123,9 +123,8 @@ local function BuildFrame()
     ----------------------------------------------------------------------------
     -- Content
     --
-    -- A plain frame the steps draw into, wiped between steps by destroying its
-    -- children. WoW cannot actually destroy a frame, so they are hidden, orphaned
-    -- and dropped - see ClearContent.
+    -- The container each step's page frame is parented to. It is never emptied
+    -- itself; moving between steps swaps the page inside it - see NewPage.
     ----------------------------------------------------------------------------
     contentFrame = CreateFrame("Frame", nil, frame)
     contentFrame:SetPoint("TOPLEFT", CONTENT_INSET, -(HEADER_HEIGHT + 12))
