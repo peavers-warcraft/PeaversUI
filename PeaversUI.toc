@@ -1,0 +1,44 @@
+## Interface: 120001, 120005, 120007, 120100
+
+## Title: |cff3abdf7Peavers|rUI
+## Notes: The Peavers UI pack - an installer that sets up the whole suite in one pass
+## Author: Peavers
+## Version: 1.0.0
+
+## IconTexture: Interface\AddOns\PeaversCommons\src\Media\Icon.tga
+## Category-enUS: Peavers
+
+## X-Website: https://peavers.io
+## X-Source-Code: https://github.com/peavers-warcraft/PeaversUI
+
+# PeaversCommons and PeaversConfig are hard dependencies: the installer is built
+# out of Commons' widgets and hands off to Config's window when it finishes, so
+# without them there is nothing to show.
+#
+# The six display modules are OptionalDeps rather than Dependencies on purpose.
+# A hard dependency would mean the pack refuses to load the moment somebody
+# disables one of them - and the installer's whole second step is a list of
+# modules you are allowed to turn off. OptionalDeps still guarantees load order,
+# so every module has registered itself before the wizard reads the roster, and
+# anything missing is reported on the welcome screen with a link rather than
+# taking the pack down with it.
+## Dependencies: PeaversCommons, PeaversConfig
+## OptionalDeps: PeaversUnitFrames, PeaversMiniMap, PeaversChat, PeaversToolTip, PeaversSystemBars, PeaversPerformance
+
+## SavedVariables: PeaversUIDB
+
+Changelog.lua
+
+src\Utils\Config.lua
+
+src\Core\Modules.lua
+src\Core\Layouts.lua
+src\Core\Installer.lua
+
+src\UI\Wizard.lua
+src\UI\Steps.lua
+
+src\Utils\ConfigUI.lua
+src\Utils\Patrons.lua
+
+src\Main.lua

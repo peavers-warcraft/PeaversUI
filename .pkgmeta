@@ -1,0 +1,26 @@
+package-as: PeaversUI
+
+required-dependencies:
+  - peaversconfig
+  - peaverscommons
+
+optional-dependencies:
+  - peaversunitframes
+  - peaversminimap
+  - peaverschat
+  - peaverstooltip
+  - peaverssystembars
+  - peaversperformance
+
+ignore:
+  - .git
+  - .github
+  - .gitignore
+  - .editorconfig
+  - .pkgmeta
+  - README.md
+  - CHANGELOG.md
+  - LICENSE
+  - local_deploy.sh
+  - local_deploy.ps1
+  - perf

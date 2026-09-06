@@ -1,0 +1,11 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: PeaversUI
+  description: "A World of Warcraft UI pack that installs the Peavers interface suite - unit frames, minimap, chat, tooltips, system bars and graphics presets - through a guided installer."
+  annotations:
+    github.com/project-slug: peavers-warcraft/PeaversUI
+spec:
+  type: library
+  lifecycle: production
+  owner: peavers-warcraft
