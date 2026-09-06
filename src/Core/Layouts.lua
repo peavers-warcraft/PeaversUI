@@ -33,9 +33,15 @@
 -- ONE RULE ABOUT MEDIA: a layout never names a font or a bar texture that ships
 -- with somebody else's addon. A path into Details or DandersFrames renders as a
 -- missing texture for anyone who does not have them, and a UI pack that looks
--- broken on a clean install is worse than one that looks plain. Where the
--- source layout used third-party media, the nearest Blizzard-shipped equivalent
--- is used instead and said so at the line.
+-- broken on a clean install is worse than one that looks plain.
+--
+-- Neither fonts nor bar textures are set here at all. PeaversCommons bundles
+-- both, and every module falls back to them when `fontFace` or `barTexture` is
+-- unset, so the right media arrives by default rather than by four layouts each
+-- naming a path. That keeps the house style a one-line change over there rather
+-- than a search across this file - and it is why a layout can be a transcription
+-- of a screen that used a font and a texture from two other addons without
+-- carrying either dependency with it.
 --------------------------------------------------------------------------------
 
 local _, PUI = ...
@@ -92,10 +98,7 @@ Layouts.list = {
                         healthColorMode = "custom",
                         healthColor = { r = 0, g = 0, b = 0 },
                         healthBgAlpha = 0.3,
-                        -- WHITE8x8 in place of the DandersFrames DF_Matte the
-                        -- source layout used. Both are flat; only one of them
-                        -- ships with the game.
-                        barTexture = "Interface\\Buttons\\WHITE8x8",
+
                         showPower = false, powerHeight = 6,
                         -- Nearly bare. Buffs and debuffs on your own frame are
                         -- read from somewhere else in this setup.
@@ -112,7 +115,7 @@ Layouts.list = {
                         healthColorMode = "custom",
                         healthColor = { r = 0, g = 0, b = 0 },
                         healthBgAlpha = 0.3,
-                        barTexture = "Interface\\Buttons\\WHITE8x8",
+
                         showPower = false, powerHeight = 6,
                         -- Only your own debuffs. On a target covered in twenty
                         -- of everyone's, yours are the ones you can act on.
@@ -125,7 +128,7 @@ Layouts.list = {
                         healthColorMode = "custom",
                         healthColor = { r = 0, g = 0, b = 0 },
                         healthBgAlpha = 0.26,
-                        barTexture = "Interface\\Buttons\\WHITE8x8",
+
                         healthText = "percent",
                         powerHeight = 6,
                         maxBuffs = 8, maxDebuffs = 8, auraSize = 20,
@@ -141,7 +144,7 @@ Layouts.list = {
                         healthColorMode = "custom",
                         healthColor = { r = 0, g = 0, b = 0 },
                         healthBgAlpha = 0.3,
-                        barTexture = "Interface\\Buttons\\WHITE8x8",
+
                         showPower = false, powerHeight = 6,
                         showBuffs = true, maxBuffs = 8, maxDebuffs = 8,
                         auraSize = 20,
@@ -270,7 +273,7 @@ Layouts.list = {
                 barSpacing = -1,
                 bgAlpha = 1.0,
                 barBgAlpha = 0.35,
-                barTexture = "Interface\\Buttons\\WHITE8x8",
+
                 fontSize = 10,
                 showTitleBar = false,
                 showFrameBackground = true,
