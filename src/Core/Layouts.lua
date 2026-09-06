@@ -8,8 +8,7 @@
 --
 -- The overrides are applied as a deep merge over whatever the module already
 -- has, so a layout only has to name what it actually changes. Anything it stays
--- quiet about keeps the value the module shipped with, which is what makes
--- "Standard" a short table rather than a copy of six defaults files.
+-- quiet about keeps the value the module shipped with.
 --
 -- Coordinates: PeaversUnitFrames positions every frame as an offset from the
 -- centre of UIParent, so the numbers below are resolution independent and mean
@@ -18,10 +17,25 @@
 -- minimap belongs in a corner at every resolution rather than at a fixed
 -- distance from the middle.
 --
--- Each layout also names a graphics preset. That is a *suggestion* the wizard
--- pre-selects on the next step, never something applied behind the player's
--- back: changing CVars is the one thing in here that touches the game rather
--- than the interface, so it always gets its own explicit yes.
+-- Each layout also names a graphics preset and an auto-switch plan. Those are
+-- *suggestions* the wizard pre-selects on its graphics screen, never something
+-- applied behind the player's back: changing CVars is the one thing in here that
+-- touches the game rather than the interface, so it always gets its own
+-- explicit yes on a screen that says what it will do.
+--
+-- `autoSwitch` is what makes this pack worth more than a pile of position
+-- values. A preset you pick once is a compromise between the raid you want to
+-- survive and the open world you want to look at; a preset per context is not a
+-- compromise at all. The keys and the values are PeaversPerformance's own -
+-- "none" leaves that context alone, "restore" puts back the settings from
+-- before any preset was applied, anything else is a preset key.
+--
+-- ONE RULE ABOUT MEDIA: a layout never names a font or a bar texture that ships
+-- with somebody else's addon. A path into Details or DandersFrames renders as a
+-- missing texture for anyone who does not have them, and a UI pack that looks
+-- broken on a clean install is worse than one that looks plain. Where the
+-- source layout used third-party media, the nearest Blizzard-shipped equivalent
+-- is used instead and said so at the line.
 --------------------------------------------------------------------------------
 
 local _, PUI = ...
@@ -36,67 +50,237 @@ Layouts.list = {
     ----------------------------------------------------------------------------
     -- Standard
     --
-    -- The suite as its authors run it. Deliberately close to each module's own
-    -- defaults: this is the layout that should look like nothing happened to
-    -- somebody who already liked the individual addons, and it is the one a
-    -- reset goes back to.
+    -- Not a set of defaults: this is the author's own interface, transcribed from
+    -- a live install. That is the point of it. Anyone can invent four plausible
+    -- arrangements of frames; the one worth shipping is the one somebody
+    -- actually plays with, because every value in it has already survived
+    -- contact with a raid night.
+    --
+    -- The shape of it, in case a number below looks arbitrary: four frames on
+    -- one line low on the screen, health bars painted flat black with the class
+    -- colour thrown away, no power bars, and almost no auras on the player. It
+    -- is a layout for somebody who reads their buffs somewhere else and wants
+    -- the unit frames to answer exactly one question quickly.
     ----------------------------------------------------------------------------
     standard = {
         name = "Standard",
-        tagline = "The suite as it ships",
-        blurb = "Frames flanking the centre, minimap squared into the top-right, " ..
-                "tooltips on the cursor. If you are not sure, this is the one.",
-        graphics = "balanced",
+        tagline = "The layout this pack was built from",
+        blurb = "Four frames in a row low on the screen, flat black health bars, " ..
+                "no power bars, tooltips parked in the bottom-right. Transcribed " ..
+                "from a live install rather than invented.",
+        graphics = "quality",
+        autoSwitch = {
+            enabled = true,
+            raid = "quality",
+            mythicplus = "performance",
+            dungeon = "restore",
+            world = "restore",
+        },
 
         overrides = {
             unitframes = {
                 hideBlizzardFrames = true,
                 units = {
-                    player       = { x = -270, y = -200, width = 240, height = 46, healthText = "percent" },
-                    target       = { x =  270, y = -200, width = 240, height = 46, healthText = "percent" },
-                    targettarget = { x =  470, y = -200, width = 120, height = 28 },
-                    focus        = { x = -470, y = -200, width = 180, height = 36 },
+                    -- All four sit on one line at y = -395. The x values are a
+                    -- matched pair either side of centre plus an outrigger, so
+                    -- the row stays symmetrical at any resolution.
+                    player = {
+                        enabled = true,
+                        x = -429, y = -395, width = 170, height = 40,
+                        -- Flat black bars: the colour is carried by how full the
+                        -- bar is, not by what class is standing in it.
+                        healthColorMode = "custom",
+                        healthColor = { r = 0, g = 0, b = 0 },
+                        healthBgAlpha = 0.3,
+                        -- WHITE8x8 in place of the DandersFrames DF_Matte the
+                        -- source layout used. Both are flat; only one of them
+                        -- ships with the game.
+                        barTexture = "Interface\\Buttons\\WHITE8x8",
+                        showPower = false, powerHeight = 6,
+                        -- Nearly bare. Buffs and debuffs on your own frame are
+                        -- read from somewhere else in this setup.
+                        showBuffs = false, maxBuffs = 1,
+                        showDebuffs = false,
+                        showCastBar = false, castBarIcon = false,
+                        -- Never: a tooltip over your own frame is only ever in
+                        -- the way of the thing underneath it.
+                        tooltip = "never",
+                    },
+                    target = {
+                        enabled = true,
+                        x = 429, y = -395, width = 170, height = 40,
+                        healthColorMode = "custom",
+                        healthColor = { r = 0, g = 0, b = 0 },
+                        healthBgAlpha = 0.3,
+                        barTexture = "Interface\\Buttons\\WHITE8x8",
+                        showPower = false, powerHeight = 6,
+                        -- Only your own debuffs. On a target covered in twenty
+                        -- of everyone's, yours are the ones you can act on.
+                        debuffSource = "mine",
+                        tooltip = "ooc",
+                    },
+                    targettarget = {
+                        enabled = true,
+                        x = 600, y = -395, width = 124,
+                        healthColorMode = "custom",
+                        healthColor = { r = 0, g = 0, b = 0 },
+                        healthBgAlpha = 0.26,
+                        barTexture = "Interface\\Buttons\\WHITE8x8",
+                        healthText = "percent",
+                        powerHeight = 6,
+                        maxBuffs = 8, maxDebuffs = 8, auraSize = 20,
+                        castBarHeight = 14, castBarIcon = false,
+                        tooltip = "ooc",
+                    },
+                    focus = {
+                        -- Off, but fully configured, so switching it on from the
+                        -- settings puts it in the right place first time rather
+                        -- than in the middle of the screen.
+                        enabled = false,
+                        x = -600, y = -395, width = 170, height = 40,
+                        healthColorMode = "custom",
+                        healthColor = { r = 0, g = 0, b = 0 },
+                        healthBgAlpha = 0.3,
+                        barTexture = "Interface\\Buttons\\WHITE8x8",
+                        showPower = false, powerHeight = 6,
+                        showBuffs = true, maxBuffs = 8, maxDebuffs = 8,
+                        auraSize = 20,
+                        showCastBar = false, castBarIcon = false,
+                    },
                 },
             },
             minimap = {
                 enabled = true,
                 squareShape = true,
                 size = 155,
+                borderSize = 0,
                 anchorEnabled = true,
                 anchor = "TOPRIGHT",
                 offsetX = 0,
                 offsetY = 0,
                 zoneTextMode = "hidden",
+                hideZoomButtons = true,
+                objectiveTracker = "detach",
+                -- Blizzard's own minimap furniture: the calendar, the tracking
+                -- cone and the addon compartment are all reachable elsewhere and
+                -- all take up a corner. The queue eye stays, because there is
+                -- nowhere else to see that you are in a queue.
+                widgets = {
+                    calendar = "hidden",
+                    tracking = "hidden",
+                    compartment = "hidden",
+                    queueStatus = "corner",
+                },
+                widgetLayout = {
+                    difficulty  = { point = "TOPRIGHT", x = 0, y = 0, scale = 0.75 },
+                    indicators  = { point = "TOPLEFT", x = 0, y = 2 },
+                    queueStatus = { point = "BOTTOMLEFT", x = 0, y = 0 },
+                },
                 collectButtons = true,
                 visibility = "toggle",
                 growDirection = "LEFT",
+                buttonSize = 26,
+                buttonSpacing = 2,
                 buttonsPerRow = 2,
+                barBackground = false,
             },
             chat = {
                 enabled = true,
-                bgAlpha = 0.60,
-                fontSize = 13,
-                maxLines = 1000,
+                -- Fully opaque and borderless. Chat sits in a corner over the
+                -- world for hours; at 0.6 the world behind it competes with the
+                -- text, and the hairline is one more edge to see past.
+                background = true,
+                bgAlpha = 1.0,
+                border = false,
+                edgeToEdge = true,
+                fontSize = 12,
+                fontOutline = "NONE",
+                shadow = true,
                 fading = false,
+                timeVisible = 120,
+                maxLines = 1000,
+                styleTabs = true,
+                tabsInside = true,
+                tabUppercase = true,
+                tabUnderline = true,
+                tabFontSize = 10,
+                -- Arial Narrow ships with the game. Small uppercase tabs need a
+                -- condensed face or they run into each other.
+                tabFont = "Fonts\\ARIALN.TTF",
+                paddingLeft = 7,
+                paddingRight = 5,
+                paddingTop = 5,
+                paddingBottom = 5,
+                paddingSplit = true,
+                styleEditBox = true,
+                editBoxPosition = "bottom",
+                editBoxHeight = 22,
+                editBoxChannelColor = true,
+                -- On: the arrow keys walk chat history rather than the cursor.
+                altArrowKeys = true,
+                showBottomButton = true,
+                urlLinks = true,
+                urlBrackets = true,
+                copyButton = true,
+                copyButtonVisibility = "dim",
+                copyIconSize = 11,
+                copyStripColors = true,
+                shortChannelNames = true,
+                timestamps = "default",
             },
             tooltip = {
                 enabled = true,
                 scale = 1.0,
-                anchorMode = "cursor",
-                healthBar = true,
+                fontSize = 12,
+                bgAlpha = 0.94,
+                borderByQuality = true,
+                borderByReaction = true,
+                -- Parked, not on the cursor. A tooltip that follows the mouse is
+                -- the single biggest thing covering the middle of the screen,
+                -- and the middle of the screen is where the fight is.
+                anchorMode = "anchor",
+                anchorPoint = "BOTTOMRIGHT",
+                anchorX = 0,
+                anchorY = 224,
+                -- Off: the unit frames already carry health, and a second bar
+                -- saying the same thing in a different place is noise.
+                healthBar = false,
                 healthBarPosition = "bottom",
+                healthBarHeight = 6,
+                healthBarColorByUnit = true,
+                healthBarText = "none",
+                classColorNames = true,
+                showTarget = true,
+                showItemID = false,
+                showSpellID = false,
+                showIcon = false,
                 hideInCombat = "never",
             },
             systembars = {
-                framePoint = "RIGHT",
-                frameX = -20,
-                frameY = 0,
-                frameWidth = 200,
-                barHeight = 20,
-                showTitleBar = true,
+                -- Tucked under the minimap in the top-right corner rather than
+                -- floating at the right edge, so the whole corner reads as one
+                -- block of instrumentation.
+                framePoint = "TOPRIGHT",
+                frameX = 0,
+                frameY = -155,
+                frameWidth = 157,
+                barHeight = 13,
+                -- Negative spacing overlaps the bars by a pixel, which closes
+                -- the seam between them into one solid stack.
+                barSpacing = -1,
+                bgAlpha = 1.0,
+                barBgAlpha = 0.35,
+                barTexture = "Interface\\Buttons\\WHITE8x8",
+                fontSize = 10,
+                showTitleBar = false,
                 showFrameBackground = true,
                 showStatNames = true,
                 showStatValues = true,
+                customColors = {
+                    -- A dim green for FPS: legible against the dark bar without
+                    -- reading as an alert the way a bright colour would.
+                    FPS = { r = 0.180, g = 0.408, b = 0.180 },
+                },
             },
         },
     },
@@ -104,7 +288,7 @@ Layouts.list = {
     ----------------------------------------------------------------------------
     -- Compact
     --
-    -- The same layout drawn smaller and pulled inwards. This is what a 1440p or
+    -- The same idea drawn smaller and pulled inwards. This is what a 1440p or
     -- 4K screen usually wants: at those resolutions the default sizes are not
     -- too big in pixels, they are too far apart in degrees, and the fix is to
     -- move things towards the middle rather than to scale everything up.
@@ -116,26 +300,37 @@ Layouts.list = {
                 "screen. Suits high resolutions, where the default spread means " ..
                 "taking your eyes off your character to read your own health.",
         graphics = "balanced",
+        autoSwitch = {
+            enabled = true,
+            raid = "performance",
+            mythicplus = "performance",
+            dungeon = "none",
+            world = "restore",
+        },
 
         overrides = {
             unitframes = {
                 hideBlizzardFrames = true,
                 units = {
                     player = {
+                        enabled = true,
                         x = -210, y = -160, width = 200, height = 38,
                         fontSize = 10, castBarHeight = 16, auraSize = 18,
                         maxBuffs = 6, maxDebuffs = 6, powerHeight = 4,
                     },
                     target = {
+                        enabled = true,
                         x = 210, y = -160, width = 200, height = 38,
                         fontSize = 10, castBarHeight = 16, auraSize = 18,
                         maxBuffs = 6, maxDebuffs = 6, powerHeight = 4,
                     },
                     targettarget = {
+                        enabled = true,
                         x = 390, y = -160, width = 110, height = 24,
                         fontSize = 9, auraSize = 14,
                     },
                     focus = {
+                        enabled = true,
                         x = -390, y = -160, width = 150, height = 30,
                         fontSize = 10, castBarHeight = 14, auraSize = 16,
                         maxBuffs = 5, maxDebuffs = 5,
@@ -197,8 +392,7 @@ Layouts.list = {
     --
     -- The one thing it does *not* do is hide anything you need in a fight. Cast
     -- bars stay, debuffs on your target stay, and tooltips move to a fixed
-    -- corner rather than switching off - a tooltip that follows the cursor is
-    -- the single biggest thing covering the middle of the screen.
+    -- corner rather than switching off.
     ----------------------------------------------------------------------------
     cinematic = {
         name = "Cinematic",
@@ -208,6 +402,16 @@ Layouts.list = {
                 "bottom-right instead of following the mouse. Target-of-target " ..
                 "is switched off.",
         graphics = "quality",
+        -- The one layout that leaves the open world alone rather than restoring
+        -- it: somebody who picked Cinematic is there to look at the game, and
+        -- Quality is already the setting they would have chosen standing still.
+        autoSwitch = {
+            enabled = true,
+            raid = "balanced",
+            mythicplus = "performance",
+            dungeon = "none",
+            world = "none",
+        },
 
         overrides = {
             unitframes = {
@@ -301,6 +505,16 @@ Layouts.list = {
                 "numbers and percent, a 2,000 line chat buffer - and unit " ..
                 "tooltips suppressed in combat so nothing sits over the boss.",
         graphics = "performance",
+        -- The only layout that drops the dungeon too. Somebody who picked Raid
+        -- is optimising for frames in group content generally, not just on the
+        -- two nights a week that are actually a raid.
+        autoSwitch = {
+            enabled = true,
+            raid = "performance",
+            mythicplus = "performance",
+            dungeon = "performance",
+            world = "restore",
+        },
 
         overrides = {
             unitframes = {
@@ -410,6 +624,28 @@ function Layouts:Sorted()
         end
     end
     return out
+end
+
+-- The auto-switch plan a layout suggests, as a fresh table the caller may edit.
+-- Copied rather than handed over: the wizard lets people change a context on the
+-- graphics screen, and doing that to the layout table itself would quietly
+-- rewrite the shipped layout for the rest of the session.
+function Layouts:AutoSwitchFor(key)
+    local layout = self:Get(key)
+    local plan = layout and layout.autoSwitch
+
+    if not plan then
+        return { enabled = false, raid = "none", mythicplus = "none",
+                 dungeon = "none", world = "none" }
+    end
+
+    return {
+        enabled = plan.enabled and true or false,
+        raid = plan.raid or "none",
+        mythicplus = plan.mythicplus or "none",
+        dungeon = plan.dungeon or "none",
+        world = plan.world or "none",
+    }
 end
 
 return Layouts

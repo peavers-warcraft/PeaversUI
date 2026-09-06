@@ -292,13 +292,19 @@ Steps.list.layout = {
                 card:SetSelected(cardKey == key)
             end
 
-            -- The graphics step takes its starting value from the layout, right
-            -- up until the player picks a tier by hand. After that their choice
-            -- survives a change of mind about the layout.
+            -- The graphics step takes its starting values from the layout, right
+            -- up until the player edits them by hand. After that their choices
+            -- survive a change of mind about the layout. The baseline and the
+            -- auto-switch plan track that independently, so tweaking one context
+            -- does not freeze the other.
             if not choices.graphicsTouched then
                 local layout = Layouts:Get(key)
                 choices.recommendedGraphics = layout and layout.graphics or nil
                 choices.graphicsPreset = choices.recommendedGraphics
+            end
+
+            if not choices.autoSwitchTouched then
+                choices.autoSwitch = Layouts:AutoSwitchFor(key)
             end
         end
 
@@ -326,7 +332,7 @@ Steps.list.layout = {
 
 Steps.list.graphics = {
     title = "Graphics",
-    subtitle = "The one step that changes the game rather than the interface. Every " ..
+    subtitle = "The one screen that changes the game rather than the interface. Every " ..
                "console variable is recorded before it is touched, so /pperf restore " ..
                "puts all of it back exactly as it was.",
 
@@ -339,10 +345,12 @@ Steps.list.graphics = {
         if #options == 1 then
             local note = W:CreateLabel(page,
                 "PeaversPerformance is not running, so there are no graphics presets " ..
-                "to offer. The rest of the pack installs normally, and your graphics " ..
-                "settings are left exactly as they are.\n\n" ..
-                "If you install it later, /pperf has the same five tiers this step " ..
-                "would have shown.", {
+                "to offer and nothing to switch between. The rest of the pack installs " ..
+                "normally, and your graphics settings are left exactly as they are.\n\n" ..
+                "It is the module that makes this pack worth more than a set of frame " ..
+                "positions: it applies a preset when you zone into a raid or a key and " ..
+                "puts it back when you leave, which is a thing you would otherwise do " ..
+                "by hand or not at all.", {
                 color = C.textMuted,
                 width = width - 8,
                 wrap = true,
@@ -356,54 +364,145 @@ Steps.list.graphics = {
             choices.graphicsPreset = choices.recommendedGraphics or "none"
         end
 
-        local cards = {}
-        local y = -2
+        ------------------------------------------------------------------------
+        -- Two columns
+        --
+        -- Baseline on the left, what-happens-when-you-zone on the right. They
+        -- are one decision about graphics rather than two, and splitting them
+        -- across two screens would hide the rule that ties them together: if
+        -- the baseline is "leave my settings alone", auto-switch has nothing to
+        -- switch away from and is greyed out.
+        ------------------------------------------------------------------------
+        local gutter = 24
+        local leftWidth = math.floor((width - gutter) * 0.5)
+        local rightWidth = width - gutter - leftWidth
+        local rightX = leftWidth + gutter
 
-        local function Select(value, byHand)
-            choices.graphicsPreset = value
-            if byHand then choices.graphicsTouched = true end
-            for cardValue, card in pairs(cards) do
-                card:SetSelected(cardValue == value)
+        local presetCards = {}
+        local autoControls = {}
+        local enableBox
+        local plan = choices.autoSwitch
+
+        -- Everything on the right is meaningless without a baseline, so it dims
+        -- and stops responding rather than sitting there looking clickable.
+        --
+        -- The children have to be walked, not just the control: both the
+        -- checkbox and the dropdown are a plain Frame with the actual clickable
+        -- Button parented inside it, so calling EnableMouse(false) on the
+        -- wrapper alone leaves a greyed-out control that still takes clicks.
+        local function SetAutoEnabled(on)
+            local alpha = on and 1 or 0.35
+            for _, control in ipairs(autoControls) do
+                control:SetAlpha(alpha)
+                control:EnableMouse(on and true or false)
+                for _, child in ipairs({ control:GetChildren() }) do
+                    child:EnableMouse(on and true or false)
+                end
             end
         end
+
+        local function SelectPreset(value, byHand)
+            choices.graphicsPreset = value
+            if byHand then choices.graphicsTouched = true end
+            for cardValue, card in pairs(presetCards) do
+                card:SetSelected(cardValue == value)
+            end
+
+            local usable = value ~= "none"
+            if not usable then
+                plan.enabled = false
+                if enableBox and enableBox.SetChecked then
+                    enableBox:SetChecked(false)
+                end
+            end
+            SetAutoEnabled(usable)
+        end
+
+        ------------------------------------------------------------------------
+        -- Left: the baseline
+        ------------------------------------------------------------------------
+        local _, leftY = W:CreateSectionHeader(page, "Baseline", 0, -2, { width = leftWidth })
+        leftY = leftY - 2
 
         for _, option in ipairs(options) do
             local tagline
             if option.value ~= "none" and option.value == choices.recommendedGraphics then
-                local layout = Layouts:Get(choices.layout)
-                tagline = "suggested for " .. (layout and layout.name or "this layout")
+                tagline = "suggested"
             end
 
             local card = SelectCard(page, {
-                width = width - 4,
-                height = 46,
+                width = leftWidth,
+                height = 42,
                 title = option.label,
                 tagline = tagline,
-                blurb = nil,
-                onClick = function() Select(option.value, true) end,
+                onClick = function() SelectPreset(option.value, true) end,
             })
 
-            -- A one-line card, so the blurb sits beside the title rather than
-            -- under it; six of these have to fit on one screen.
             if option.blurb then
                 local blurb = W:CreateLabel(card, option.blurb, {
                     font = "GameFontNormalSmall",
                     color = C.textMuted,
-                    width = width - 40,
-                    wrap = true,
+                    width = leftWidth - 26,
+                    wrap = false,
                 })
-                blurb:SetPoint("TOPLEFT", 14, -26)
+                blurb:SetPoint("TOPLEFT", 14, -24)
             end
 
-            card:SetPoint("TOPLEFT", 0, y)
-            cards[option.value] = card
-            y = y - 52
+            card:SetPoint("TOPLEFT", 0, leftY)
+            presetCards[option.value] = card
+            leftY = leftY - 48
         end
 
-        Select(choices.graphicsPreset, false)
+        ------------------------------------------------------------------------
+        -- Right: switch automatically
+        ------------------------------------------------------------------------
+        local _, rightY = W:CreateSectionHeader(page, "Switch automatically", rightX, -2,
+            { width = rightWidth })
+        rightY = rightY - 2
+
+        local intro = W:CreateLabel(page,
+            "Apply a different preset when you zone into a raid, a key or a dungeon, " ..
+            "and put it back in the open world. Every switch is announced in chat.", {
+            font = "GameFontNormalSmall",
+            color = C.textMuted,
+            width = rightWidth,
+            wrap = true,
+        })
+        intro:SetPoint("TOPLEFT", rightX, rightY)
+        rightY = rightY - 34
+
+        enableBox = W:CreateCheckbox(page, "Switch by content", {
+            checked = plan.enabled == true,
+            width = rightWidth,
+            onChange = function(checked)
+                plan.enabled = checked
+                choices.autoSwitchTouched = true
+            end,
+        })
+        enableBox:SetPoint("TOPLEFT", rightX, rightY)
+        autoControls[#autoControls + 1] = enableBox
+        rightY = rightY - 28
+
+        local targets = Installer:AutoSwitchTargets()
+
+        for _, ctx in ipairs(Installer:AutoSwitchContexts()) do
+            local dropdown = W:CreateDropdown(page, ctx.name, {
+                width = rightWidth,
+                selected = plan[ctx.key] or "none",
+                options = targets,
+                onChange = function(value)
+                    plan[ctx.key] = value
+                    choices.autoSwitchTouched = true
+                end,
+            })
+            dropdown:SetPoint("TOPLEFT", rightX, rightY)
+            autoControls[#autoControls + 1] = dropdown
+            rightY = rightY - 50
+        end
+
+        SelectPreset(choices.graphicsPreset, false)
     end,
 }
-
 --------------------------------------------------------------------------------
 -- 5. Review, then done
 --

@@ -194,6 +194,10 @@ function ConfigUI:BuildLayoutPage(parentFrame)
                         or false
                 end
 
+                -- Graphics were never asked about on this path, so the plan is
+                -- dropped rather than passed as "none": passing it would count
+                -- as an answer and switch an existing auto-switch setup off.
+                choices.autoSwitch = nil
                 choices.graphicsPreset = "none"
                 Installer:Apply(choices)
 

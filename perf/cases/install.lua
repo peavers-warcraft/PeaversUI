@@ -4,8 +4,8 @@
 -- The claim being tested is unusually simple, and worth stating before the
 -- numbers: **this addon does its work once and then stops existing.** It draws
 -- no frames until somebody opens the installer, installs no OnUpdate, starts no
--- ticker, and registers no combat events. After the install it is a hundred
--- kilobytes of Lua sitting still.
+-- ticker, and registers no combat events. After the install it is a pile of
+-- Lua sitting still.
 --
 -- That is a negative claim, and negative claims rot quietly, so the case
 -- measures it rather than asserting it: it loads the real Config, Modules,
@@ -26,6 +26,12 @@
 --     units.player.height, and must not detach a sub-table it writes into.
 --   * Skipping. A module that is not running must be reported, not written to.
 --   * Off means off. An unticked module gets its toggle and none of the layout.
+--   * Auto-switch is written through PeaversPerformance's own config keys and
+--     evaluated with force, so the context you are standing in is acted on now
+--     rather than at the next loading screen.
+--   * A "none" baseline switches auto-switch off, because leave-my-graphics-
+--     alone has to mean alone - but a layout-only apply, which never asked the
+--     question, must not touch any of it.
 --
 -- The UI files are deliberately not loaded: Wizard and Steps are built out of
 -- PeaversCommons.Widgets, which is a different addon, and stubbing a widget
@@ -133,8 +139,27 @@ _G.PeaversCommons = {
 -- addon's data, not as a contract between two addons.
 --------------------------------------------------------------------------------
 
+-- ConfigManager.CommonDefaults, transcribed. Every Peavers config is the module's
+-- own defaults merged over this, so a layout is free to write `bgAlpha` into a
+-- module whose own defaults never mention it - and the key check has to know
+-- that, or it rejects a setting the module really does have.
+local COMMON_DEFAULTS = {
+    frameWidth = 200, frameHeight = 100, framePoint = "CENTER",
+    frameX = 0, frameY = 0, lockPosition = false,
+    barHeight = 20, barSpacing = 2, barBgAlpha = 0.5, barAlpha = 1.0,
+    textAlpha = 1.0, barTexture = "Interface\\TargetingFrame\\UI-StatusBar",
+    fontFace = "Fonts\\FRIZQT__.TTF", fontSize = 9,
+    fontOutline = "OUTLINE", fontShadow = false,
+    bgAlpha = 0.8, bgColor = { r = 0, g = 0, b = 0 },
+    showOnLogin = true, showTitleBar = true, updateInterval = 0.5,
+    DEBUG_ENABLED = false, customColors = {}, useGlobalAppearance = false,
+}
+
 local function FakeConfig(defaults)
-    local config = DeepCopy(defaults)
+    local config = DeepCopy(COMMON_DEFAULTS)
+    for key, value in pairs(DeepCopy(defaults)) do
+        config[key] = value
+    end
     config.saves = 0
     function config:Save() self.saves = self.saves + 1 Hop() return true end
     return config
@@ -145,6 +170,7 @@ local function UnitDefaults(overrides)
         enabled = true,
         width = 240, height = 46, x = 0, y = 0, bgAlpha = 0.85, tooltip = "always",
         barTexture = "bar", healthColorMode = "class", healthBgAlpha = 0.22,
+        healthColor = { r = 0.25, g = 0.62, b = 0.36 },
         showPower = true, powerHeight = 5,
         showName = true, healthText = "percent", fontSize = 11,
         fontOutline = "OUTLINE", fontShadow = false,
@@ -238,7 +264,14 @@ function PSB.BarManager:ResizeBars() Hop() end
 
 local appliedPresets = {}
 local PPERF = {
-    Config = FakeConfig({ activePreset = false, autoSwitchEnabled = false }),
+    Config = FakeConfig({
+        activePreset = false,
+        autoSwitchEnabled = false,
+        autoSwitchRaid = "performance",
+        autoSwitchMythicPlus = "performance",
+        autoSwitchDungeon = "none",
+        autoSwitchWorld = "restore",
+    }),
     Presets = {
         order = { "maximum", "quality", "balanced", "performance", "minimum" },
         presets = {
@@ -255,6 +288,30 @@ local PPERF = {
             appliedPresets[#appliedPresets + 1] = key
         end,
     },
+}
+
+PPERF.Presets.GetName = function(key)
+    local preset = PPERF.Presets.presets[key]
+    return preset and preset.name or key
+end
+
+-- Mirrors PeaversPerformance's own AutoSwitch: the same four contexts under the
+-- same config keys, and an Evaluate that records rather than acts.
+local evaluations = 0
+PPERF.AutoSwitch = {
+    contexts = {
+        { key = "raid",       name = "Raid",       configKey = "autoSwitchRaid" },
+        { key = "mythicplus", name = "Mythic+",    configKey = "autoSwitchMythicPlus" },
+        { key = "dungeon",    name = "Dungeon",    configKey = "autoSwitchDungeon" },
+        { key = "world",      name = "Open world", configKey = "autoSwitchWorld" },
+    },
+    Evaluate = function(force)
+        Hop()
+        evaluations = evaluations + 1
+        -- The installer must force, or PeaversPerformance's same-context guard
+        -- decides nothing changed because the zone did not.
+        assert(force == true, "AutoSwitch.Evaluate must be called with force=true, got " .. tostring(force))
+    end,
 }
 
 -- PeaversChat is deliberately absent: nothing is put in _G for it, and
@@ -308,10 +365,14 @@ local KNOWN = {
     tooltip = PTT.Config,
     systembars = PSB.Config,
     -- PeaversChat is not loaded in this case, so its keys are listed rather
-    -- than read off a live config. Transcribed from PeaversChat/src/Utils/Config.lua.
+    -- than read off a live config. Transcribed from PeaversChat/src/Utils/Config.lua,
+    -- and merged over COMMON_DEFAULTS below the same way a real config is.
     chat = {
         enabled = true, background = true, bgAlpha = 0.6, border = true,
         paddingLeft = 8, paddingRight = 6, paddingTop = 6, paddingBottom = 6,
+        -- The legacy pair, kept in PeaversChat's defaults so migration has
+        -- something to read on a profile that predates the four-sided split.
+        padding = 6, paddingSplit = false,
         edgeToEdge = true, fontSize = 13, fontOutline = "NONE", shadow = true,
         fading = false, timeVisible = 120, maxLines = 1000,
         styleTabs = true, tabFontSize = 12, tabFont = "", tabsInside = true,
@@ -326,15 +387,33 @@ local KNOWN = {
     },
 }
 
+for key, value in pairs(COMMON_DEFAULTS) do
+    if KNOWN.chat[key] == nil then KNOWN.chat[key] = value end
+end
+
+-- Settings whose contents are free-form rather than a fixed set of keys: a
+-- minimap widget name, a stat name, a button frame name. The setting itself is
+-- checked, its contents are not, because there is no list of valid keys to check
+-- them against - the module invents them at runtime from whatever is loaded.
+local OPAQUE = {
+    widgets = true,
+    widgetLayout = true,
+    customColors = true,
+    excluded = true,
+}
+
 local function CheckKeys(layoutKey, moduleKey, overrides, known, path)
     for key, value in pairs(overrides) do
         local where = layoutKey .. "." .. moduleKey .. "." .. path .. key
         assert(known[key] ~= nil, where .. " is not a setting the module has")
-        if type(value) == "table" and type(known[key]) == "table" then
+        if type(value) == "table" and type(known[key]) == "table" and not OPAQUE[key] then
             CheckKeys(layoutKey, moduleKey, value, known[key], path .. key .. ".")
         end
     end
 end
+
+local contextKeys = {}
+for _, ctx in ipairs(PPERF.AutoSwitch.contexts) do contextKeys[ctx.key] = true end
 
 local layoutsChecked, keysChecked = 0, 0
 for _, entry in ipairs(Layouts:Sorted()) do
@@ -349,6 +428,22 @@ for _, entry in ipairs(Layouts:Sorted()) do
         entry.key .. " is missing a name, blurb or graphics suggestion")
     assert(PPERF.Presets.presets[entry.layout.graphics],
         entry.key .. " suggests a graphics preset that does not exist: " .. entry.layout.graphics)
+
+    -- The auto-switch plan is checked the same way the overrides are: every
+    -- context has to be one PeaversPerformance knows about, and every target
+    -- has to be a real preset or one of the two pseudo-targets.
+    local plan = entry.layout.autoSwitch
+    assert(plan, entry.key .. " has no auto-switch plan")
+    for _, ctx in ipairs(PPERF.AutoSwitch.contexts) do
+        local target = plan[ctx.key]
+        assert(target ~= nil, entry.key .. " auto-switch is missing context " .. ctx.key)
+        assert(target == "none" or target == "restore" or PPERF.Presets.presets[target],
+            entry.key .. " auto-switch " .. ctx.key .. " targets an unknown preset: " .. tostring(target))
+    end
+    for key in pairs(plan) do
+        assert(key == "enabled" or contextKeys[key],
+            entry.key .. " auto-switch names a context that does not exist: " .. key)
+    end
 end
 
 --------------------------------------------------------------------------------
@@ -378,18 +473,52 @@ assert(#result.failures == 0, "install reported failures: " .. table.concat(resu
 assert(#result.skipped == 1 and result.skipped[1] == "Chat", "Chat should be the only skipped module")
 assert(#result.applied == 4, "expected four modules configured, got " .. #result.applied)
 
--- Layout values landed.
-assert(PUF.Config.units.player.x == -270, "unit frame position not written")
-assert(PMM.Config.size == 155 and PMM.Config.enabled == true, "minimap not configured")
-assert(PTT.Config.anchorMode == "cursor" and PTT.Config.enabled == true, "tooltip not configured")
-assert(PSB.Config.framePoint == "RIGHT" and PSB.Core.frame.shown == true, "system bars not configured")
+-- Layout values landed. These are the Standard layout, which is a transcription
+-- of a live install rather than a set of round numbers - so they are spot checks
+-- on the transcription as much as on the installer.
+assert(PUF.Config.units.player.x == -429, "unit frame position not written")
+assert(PUF.Config.units.player.y == -395, "unit frame position not written")
+assert(PUF.Config.units.player.healthColorMode == "custom", "flat health bars not written")
+assert(PUF.Config.units.player.healthColor.r == 0, "health colour not written")
+-- Configured but off, so switching it on later puts it in the right place.
+assert(PUF.Config.units.focus.enabled == false, "focus should be off in Standard")
+assert(PUF.Config.units.focus.x == -600, "focus should still be positioned while off")
 
--- Deep merge kept the siblings the layout said nothing about.
+assert(PMM.Config.size == 155 and PMM.Config.enabled == true, "minimap not configured")
+assert(PMM.Config.widgets.calendar == "hidden", "minimap widget dispositions not written")
+assert(PMM.Config.widgetLayout.difficulty.scale == 0.75, "minimap widget layout not written")
+
+assert(PTT.Config.anchorMode == "anchor" and PTT.Config.enabled == true, "tooltip not configured")
+assert(PTT.Config.healthBar == false, "tooltip health bar should be off in Standard")
+
+assert(PSB.Config.framePoint == "TOPRIGHT" and PSB.Core.frame.shown == true, "system bars not configured")
+assert(PSB.Config.barSpacing == -1, "system bar overlap not written")
+assert(PSB.Config.customColors.FPS.g == 0.408, "system bar FPS colour not written")
+
+-- Deep merge kept the siblings the layout said nothing about. bgAlpha and
+-- auraSpacing are good probes precisely because no layout mentions them.
 assert(PUF.Config.units.player.auraSpacing == 2, "deep merge clobbered a sibling key")
-assert(PUF.Config.units.player.height == 46, "deep merge clobbered a sibling key")
+assert(PUF.Config.units.player.bgAlpha == 0.85, "deep merge clobbered a sibling key")
 
 -- Graphics went through PeaversPerformance rather than being set here.
 assert(#appliedPresets == 1 and appliedPresets[1] == "balanced", "graphics preset not applied")
+
+--------------------------------------------------------------------------------
+-- Auto-switch
+--
+-- The standard plan came off the layout and was written into
+-- PeaversPerformance's own config keys, and Evaluate was forced so that the
+-- context the player is standing in right now is acted on rather than waiting
+-- for the next loading screen.
+--------------------------------------------------------------------------------
+
+assert(PPERF.Config.autoSwitchEnabled == true, "auto-switch was not enabled")
+assert(PPERF.Config.autoSwitchRaid == "quality",
+    "raid context not written, got " .. tostring(PPERF.Config.autoSwitchRaid))
+assert(PPERF.Config.autoSwitchMythicPlus == "performance", "mythic+ context not written")
+assert(PPERF.Config.autoSwitchDungeon == "restore", "dungeon context not written")
+assert(PPERF.Config.autoSwitchWorld == "restore", "world context not written")
+assert(evaluations == 1, "auto-switch should be evaluated once per install, got " .. evaluations)
 
 -- The pack recorded the run.
 assert(PUI.Config.installedVersion == PUI.version, "install was not recorded")
@@ -416,6 +545,13 @@ assert(PUF.Config.units.player.enabled == true, "cinematic should leave the play
 assert(PMM.Config.visibility == "hover", "cinematic minimap not applied")
 assert(#appliedPresets == 1, "graphicsPreset 'none' must not touch the client")
 
+-- "Leave my graphics alone" has to mean alone. The screen was shown (a plan is
+-- present) and the baseline came back "none", so an auto-switch plan carried
+-- over from the previous install must be switched off rather than left firing.
+assert(PPERF.Config.autoSwitchEnabled == false,
+    "a 'none' baseline must switch auto-switch off, not leave the old plan running")
+assert(evaluations == 1, "a 'none' baseline must not evaluate")
+
 --------------------------------------------------------------------------------
 -- Off means off
 --
@@ -440,6 +576,33 @@ for _, label in ipairs(partialResult.applied) do
     assert(label ~= "MiniMap", "an unticked module must not be reported as configured")
 end
 assert(PUF.Config.units.player.x == -300, "the raid layout should still have reached unit frames")
+
+--------------------------------------------------------------------------------
+-- A layout-only apply does not touch graphics at all
+--
+-- /pui apply raid, and the Apply buttons on the settings page, never asked the
+-- player about graphics - so they pass no plan, and nothing in PeaversPerformance
+-- may move. Without this, changing layout would quietly switch off an
+-- auto-switch setup somebody configured weeks ago.
+--------------------------------------------------------------------------------
+
+PPERF.Config.autoSwitchEnabled = true
+PPERF.Config.autoSwitchRaid = "minimum"
+local presetsBefore = #appliedPresets
+local evaluationsBefore = evaluations
+
+local layoutOnly = Installer:NewChoices("compact")
+layoutOnly.graphicsPreset = "none"
+layoutOnly.autoSwitch = nil
+Installer:Apply(layoutOnly)
+
+assert(PPERF.Config.autoSwitchEnabled == true,
+    "a layout-only apply must not switch auto-switch off")
+assert(PPERF.Config.autoSwitchRaid == "minimum",
+    "a layout-only apply must not rewrite a context")
+assert(#appliedPresets == presetsBefore, "a layout-only apply must not apply a preset")
+assert(evaluations == evaluationsBefore, "a layout-only apply must not evaluate")
+assert(PUF.Config.units.player.x == -210, "the compact layout should still have been applied")
 
 --------------------------------------------------------------------------------
 -- Idle

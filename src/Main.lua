@@ -40,8 +40,11 @@ local function ApplyLayoutByName(name)
     end
 
     -- Never from a slash command. Changing CVars is the one thing in the pack
-    -- that wants an explicit yes on a screen that explains it.
+    -- that wants an explicit yes on a screen that explains it - and dropping the
+    -- plan entirely, rather than answering "none", is what stops this command
+    -- switching off an auto-switch setup the player already has.
     choices.graphicsPreset = "none"
+    choices.autoSwitch = nil
 
     local result = PUI.Installer:Apply(choices)
 

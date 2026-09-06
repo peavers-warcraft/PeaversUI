@@ -26,8 +26,11 @@ local PeaversCommons = _G.PeaversCommons
 local W = PeaversCommons.Widgets
 local C = W.Colors
 
-local FRAME_WIDTH = 680
-local FRAME_HEIGHT = 540
+-- Wide enough for the graphics screen, which is the only two-column page and
+-- therefore the one that sets the floor: a preset card and a context dropdown
+-- side by side both need room for a sentence.
+local FRAME_WIDTH = 760
+local FRAME_HEIGHT = 560
 local CONTENT_INSET = 24
 local FOOTER_HEIGHT = 54
 local HEADER_HEIGHT = 76

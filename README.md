@@ -31,7 +31,7 @@ Runs once, on your first login after installing, and never again unless you ask 
 1. **What you have.** Every module in the pack, and whether it is running, installed but not enabled at the character screen, or absent. Three different problems needing three different answers.
 2. **Which parts you want.** Everything on by default. Unticking a module switches it off and hands that piece of the interface back to Blizzard — it does not uninstall anything, and each module's own settings turn it back on.
 3. **How it should look.** Four layouts, below.
-4. **Graphics.** The one screen that changes the game rather than the interface, so it gets a screen of its own and an explicit yes.
+4. **Graphics.** A baseline preset, and a plan for switching between presets by content. The one screen that changes the game rather than the interface, so it gets a screen of its own and an explicit yes.
 5. **A summary you have to agree to.**
 
 **Nothing is written until you press Install.** Ticking boxes and picking layouts only edits a plan, so backing out at any point up to that button leaves the game exactly as it was found. That is the difference between an installer and a settings panel, and it is why the summary screen can promise anything at all.
@@ -42,12 +42,33 @@ Everything the installer writes lands in each module's own saved settings, where
 
 | Layout | For |
 |---|---|
-| **Standard** | The suite as it ships. Frames flanking the centre, minimap squared into the top-right, tooltips on the cursor. |
+| **Standard** | The author's own interface, transcribed from a live install rather than invented. Four frames in a row low on the screen, flat black health bars, no power bars, tooltips parked in the bottom-right. |
 | **Compact** | Everything drawn smaller and pulled in towards the middle. Suits high resolutions, where the default spread means taking your eyes off your character to read your own health. |
 | **Cinematic** | Chrome out of the way. Chat faded back, addon buttons hidden until you point at them, tooltips parked in a corner instead of following the mouse, target-of-target off. |
 | **Raid** | Information dense. Larger frames, longer aura rows, health in numbers and percent, a 2,000 line chat buffer, and unit tooltips suppressed in combat so nothing sits over the boss. |
 
 Every value a layout sets is an ordinary setting afterwards. `/pui apply cinematic` switches between them without walking the wizard again, and it deliberately leaves your module choices and your graphics settings alone — those are decisions about what you have installed and what your machine can do, and neither changes because you fancied a different arrangement of frames.
+
+### Graphics that follow the content
+
+This is the part that a pile of frame positions does not give you.
+
+A graphics preset you pick once is a compromise: high enough that the open world still looks like the game you bought, low enough that a twenty-man pull does not drop you to fifteen frames. It is the wrong setting in both places, all the time.
+
+So the installer asks for two things instead of one. A **baseline**, applied now — and a **plan**, which says what happens when you zone:
+
+| Where you are | Standard | Raid | Cinematic |
+|---|---|---|---|
+| Raid | Quality | Performance | Balanced |
+| Mythic+ | Performance | Performance | Performance |
+| Dungeon | back to your own settings | Performance | no change |
+| Open world | back to your own settings | back to your own settings | no change |
+
+Every context can also be set to **No change**, which leaves it alone entirely, or **My original settings**, which puts back the console variables you had before any preset was applied.
+
+The switching itself is PeaversPerformance''s, not this pack''s — it snapshots every CVar before it writes one, defers to after combat when it has to, and announces every switch in chat so nothing happens silently. What the pack adds is the part people never get round to: a plan that is already filled in, on a screen you were going to look at anyway.
+
+Two rules keep it honest. Choosing **Leave my graphics settings alone** as the baseline switches auto-switching off too — alone means alone. And `/pui apply <layout>`, which never asks the graphics question, never touches any of it: changing your mind about frame positions will not quietly undo a plan you set up weeks ago.
 
 ## Measured performance
 
@@ -61,7 +82,7 @@ Negative claims rot quietly, so it is measured rather than asserted. The table b
 
 | Check | Measured | Budget | |
 |---|---:|---:|:--:|
-| Packaged size | 98.3 KB | 120 KB | pass |
+| Packaged size | 121.7 KB | 140 KB | pass |
 | Bundled libraries | 0 | 0 | pass |
 | Widget calls per frame | 0 | 0 | pass |
 | Widget calls per second while idle | 0 | 0 | pass |
@@ -70,20 +91,21 @@ Scenarios driven against the real addon source, outside the game:
 
 | Scenario | Calls/frame | Notes |
 |---|---:|---|
-| installing the pack, four modules and a graphics preset | 0.00 | 24 calls into the module addons for the whole install, 0 frames created; happens once |
+| installing the pack, four modules and a graphics preset | 0.00 | 26 calls into the module addons for the whole install, 0 frames created; happens once |
 | idle, after installing | 0.00 | no OnUpdate, no ticker, no combat events: the pack does nothing at all once the installer has closed |
-| layout data checked against the module settings | 0.00 | 4 layouts, 143 module blocks verified key by key |
+| layout data checked against the module settings | 0.00 | 4 layouts, 203 module blocks verified key by key |
 
-<sub>2,611 lines of Lua · 98.3 KB packaged · no bundled libraries</sub>
+<sub>3,144 lines of Lua · 121.7 KB packaged · no bundled libraries</sub>
 
 <!-- perf:end -->
 
-The same case doubles as the engine's integration test, which is the only kind available for an addon whose real behaviour is "write settings into five other addons". Four of its assertions are load bearing:
+The same case doubles as the engine's integration test, which is the only kind available for an addon whose real behaviour is "write settings into five other addons". Five of its assertions are load bearing:
 
 - **Ordering.** Module toggles run before layout overrides, because switching unit frames on resets every frame's `enabled` flag. The Cinematic layout turns target-of-target off, so if that order ever flips the build fails rather than a player noticing a frame they asked to be gone.
 - **Deep merge.** A layout naming `units.player.x` must not blow away `units.player.height`.
 - **Skipping.** A module that is not running is reported, never written to.
 - **Off means off.** An unticked module gets its toggle and none of the layout.
+- **Auto-switch is config, not a guess.** The plan is written into PeaversPerformance's own keys and evaluated with `force`, so the context you are standing in is acted on immediately rather than at the next loading screen — and a layout-only apply is asserted to touch none of it.
 
 The layout data is checked too: every key any layout writes has to be a setting the module actually has. That catches a typo here — a layout writing `zoneText` when the addon reads `zoneTextMode` — which is invisible in game. It cannot catch a module renaming one of its own settings; nothing outside that module's repository can.
 
@@ -95,6 +117,8 @@ The layout data is checked too: every key any layout writes has to be a setting 
 - Four layouts — Standard, Compact, Cinematic and Raid — covering the usual reasons people rearrange a UI
 - Per-module on/off, with anything you switch off handed straight back to Blizzard
 - Graphics presets applied through PeaversPerformance, which snapshots every CVar before it touches one
+- A graphics preset per context — raid, Mythic+, dungeon, open world — pre-filled by the layout you picked, so the settings follow what you are actually doing
+- Standard is a real interface, transcribed from a live install, not four plausible-looking numbers
 - Honest about what is missing: modules that are absent, or installed but not enabled, are named rather than silently skipped
 - Switch layouts later with one command, without touching your module choices or your graphics settings
 - Everything it writes is an ordinary setting in the module's own page afterwards

@@ -84,6 +84,12 @@ function Installer:NewChoices(layoutKey)
         -- Set once the player picks a tier by hand. After that, changing the
         -- layout no longer overwrites their choice.
         graphicsTouched = false,
+        -- The per-context plan, seeded from the layout and editable on the
+        -- graphics screen. Kept beside graphicsPreset rather than inside it
+        -- because they are two different promises: the preset is what you get
+        -- when you log in, the plan is what happens when you zone.
+        autoSwitch = Layouts:AutoSwitchFor(key),
+        autoSwitchTouched = false,
         modules = {},
         recommendedGraphics = layout.graphics,
     }
@@ -139,19 +145,56 @@ function Installer:Preview(choices)
     end
 
     local performance = Modules.byKey.performance
-    if choices.graphicsPreset and choices.graphicsPreset ~= "none" then
-        local available = Modules:IsAvailable(performance)
+    local available = Modules:IsAvailable(performance)
+    local preset = choices.graphicsPreset
+
+    if not available then
         lines[#lines + 1] = {
             label = performance.label,
-            detail = available
-                and ("graphics preset: " .. choices.graphicsPreset)
-                or "not installed - graphics left alone",
-            ok = available,
+            detail = "not installed - graphics left alone",
+            ok = false,
+        }
+        return lines
+    end
+
+    if preset and preset ~= "none" then
+        lines[#lines + 1] = {
+            label = performance.label,
+            detail = "graphics preset: " .. self:PresetName(preset),
+            ok = true,
         }
     else
         lines[#lines + 1] = {
             label = performance.label,
             detail = "graphics settings left exactly as they are",
+            ok = true,
+        }
+    end
+
+    -- Auto-switch gets its own line, because it is a different promise from the
+    -- preset: one says what you get now, the other says what happens when you
+    -- walk through an instance portal. Somebody skimming the summary needs to
+    -- see both, and the contexts that will actually do something are named
+    -- rather than counted.
+    local plan = choices.autoSwitch
+    if plan and plan.enabled and preset and preset ~= "none" then
+        local active = {}
+        for _, ctx in ipairs(self:AutoSwitchContexts()) do
+            local target = plan[ctx.key]
+            if target and target ~= "none" then
+                active[#active + 1] = ctx.short .. " " .. self:PresetName(target)
+            end
+        end
+
+        lines[#lines + 1] = {
+            label = "Auto-switch",
+            detail = #active > 0 and table.concat(active, ", ") or "on, but every context set to no change",
+            ok = #active > 0,
+        }
+    else
+        lines[#lines + 1] = {
+            label = "Auto-switch",
+            detail = "off - graphics stay where you put them",
             ok = true,
         }
     end
@@ -216,7 +259,7 @@ function Installer:Apply(choices)
         end
     end
 
-    self:ApplyGraphics(choices.graphicsPreset, result)
+    self:ApplyGraphics(choices.graphicsPreset, result, choices.autoSwitch)
 
     -- Anything the module hops recorded along the way.
     for _, failure in ipairs(Modules:TakeFailures()) do
@@ -235,35 +278,181 @@ end
 -- The work is PeaversPerformance's, not ours. It snapshots every CVar before it
 -- writes one, defers to after combat if it has to, and can put everything back
 -- with /pperf restore - none of which we would get right by setting CVars here.
-function Installer:ApplyGraphics(presetKey, result)
+--
+-- Two things are written, in this order:
+--
+--   1. The baseline preset, applied now.
+--   2. The auto-switch plan, which is config rather than an action - it decides
+--      what happens the next time you zone into a raid, a key or the world.
+--
+-- Order matters here too. Auto-switch is written after the baseline so that
+-- Evaluate() at the end sees the finished config and can correct the baseline
+-- immediately if the player happens to be standing in a context the plan has an
+-- opinion about. Installing Quality while sitting in a raid that the plan says
+-- should be Performance should leave you on Performance, not on Quality until
+-- the next loading screen.
+function Installer:ApplyGraphics(presetKey, result, plan)
     result = result or { skipped = {}, failures = {} }
 
-    if not presetKey or presetKey == "none" then
+    local wantsPreset = presetKey and presetKey ~= "none"
+
+    -- `plan` present means somebody was actually shown the graphics screen and
+    -- answered it. Absent means this is a layout-only apply - /pui apply raid,
+    -- or the Apply button on the settings page - where graphics were never part
+    -- of the question. The difference matters: without it, switching layout
+    -- would quietly switch off an auto-switch plan the player set up weeks ago.
+    local asked = plan ~= nil
+
+    -- "Leave my graphics alone" has to mean alone. Auto-switch is a CVar writer
+    -- like any other, so when the screen was shown and the baseline came back
+    -- "none" the plan is forced off rather than merely left unwritten -
+    -- otherwise a plan carried over from a previous install would start firing
+    -- on somebody who just said no.
+    local wantsAuto = asked and wantsPreset and plan.enabled
+
+    if not wantsPreset and not asked then
         return result
     end
 
     local module = Modules.byKey.performance
     local ref = Modules:Ref(module)
     if not ref then
-        result.skipped[#result.skipped + 1] = module.label
+        if wantsPreset then
+            result.skipped[#result.skipped + 1] = module.label
+        end
         return result
     end
 
+    local config = ref.Config
     local manager = ref.PresetManager
-    if not manager or type(manager.ApplyPreset) ~= "function" then
-        result.failures[#result.failures + 1] = "PeaversPerformance: no preset manager"
+
+    if wantsPreset then
+        if not manager or type(manager.ApplyPreset) ~= "function" then
+            result.failures[#result.failures + 1] = "PeaversPerformance: no preset manager"
+            return result
+        end
+
+        -- ApplyPreset is a plain function on the module, not a method: it is
+        -- called as PresetManager.ApplyPreset(key) throughout
+        -- PeaversPerformance, so passing self here would land the table in the
+        -- key argument.
+        local ok, err = pcall(manager.ApplyPreset, presetKey)
+        if not ok then
+            result.failures[#result.failures + 1] = "PeaversPerformance: " .. tostring(err)
+        end
+    end
+
+    if not config then
         return result
     end
 
-    -- ApplyPreset is a plain function on the module, not a method: it is called
-    -- as PresetManager.ApplyPreset(key) throughout PeaversPerformance, so
-    -- passing self here would land the table in the key argument.
-    local ok, err = pcall(manager.ApplyPreset, presetKey)
-    if not ok then
-        result.failures[#result.failures + 1] = "PeaversPerformance: " .. tostring(err)
+    if asked then
+        config.autoSwitchEnabled = wantsAuto and true or false
+
+        if wantsAuto then
+            for _, ctx in ipairs(self:AutoSwitchContexts()) do
+                local target = plan[ctx.key]
+                if target ~= nil then
+                    config[ctx.configKey] = target
+                end
+            end
+        end
+
+        Modules.Call(ref, "Config:Save")
+    end
+
+    -- Act on wherever the player is standing right now. force skips
+    -- PeaversPerformance's own same-context guard, which would otherwise decide
+    -- nothing had changed because the zone had not.
+    -- Called directly rather than through Modules.Call: Evaluate is a plain
+    -- function taking one argument, and Call passes the owning table as self,
+    -- which would land in the `force` parameter.
+    if wantsAuto and ref.AutoSwitch and type(ref.AutoSwitch.Evaluate) == "function" then
+        local ok, err = pcall(ref.AutoSwitch.Evaluate, true)
+        if not ok then
+            result.failures[#result.failures + 1] = "PeaversPerformance auto-switch: " .. tostring(err)
+        end
     end
 
     return result
+end
+
+--------------------------------------------------------------------------------
+-- Auto-switch vocabulary
+--
+-- Read out of PeaversPerformance where possible rather than restated here, so
+-- the wizard offers exactly the contexts and tiers that addon actually knows
+-- about. The fallback list exists only so the graphics screen can still be
+-- drawn - and explain itself - when the module is not installed.
+--------------------------------------------------------------------------------
+
+-- `short` is the label used in the one-line install summary, where "Raid
+-- Quality, M+ Performance" has to fit next to three other rows.
+local FALLBACK_CONTEXTS = {
+    { key = "raid",       name = "Raid",       short = "Raid",    configKey = "autoSwitchRaid" },
+    { key = "mythicplus", name = "Mythic+",    short = "M+",      configKey = "autoSwitchMythicPlus" },
+    { key = "dungeon",    name = "Dungeon",    short = "Dungeon", configKey = "autoSwitchDungeon" },
+    { key = "world",      name = "Open world", short = "World",   configKey = "autoSwitchWorld" },
+}
+
+local SHORT_BY_KEY = {}
+for _, ctx in ipairs(FALLBACK_CONTEXTS) do SHORT_BY_KEY[ctx.key] = ctx.short end
+
+function Installer:AutoSwitchContexts()
+    local ref = Modules:Ref(Modules.byKey.performance)
+    local contexts = ref and ref.AutoSwitch and ref.AutoSwitch.contexts
+
+    if not contexts then
+        return FALLBACK_CONTEXTS
+    end
+
+    -- PeaversPerformance owns key, name and configKey; `short` is ours, so it
+    -- is grafted on rather than expected to be there.
+    local out = {}
+    for index, ctx in ipairs(contexts) do
+        out[index] = {
+            key = ctx.key,
+            name = ctx.name,
+            configKey = ctx.configKey,
+            short = SHORT_BY_KEY[ctx.key] or ctx.name,
+        }
+    end
+    return out
+end
+
+-- Display name for a preset key, or for the two pseudo-targets the auto-switch
+-- dropdowns carry alongside the real tiers.
+function Installer:PresetName(key)
+    if key == "none" then return "No change" end
+    if key == "restore" then return "My original settings" end
+
+    local ref = Modules:Ref(Modules.byKey.performance)
+    local presets = ref and ref.Presets
+    if presets and type(presets.GetName) == "function" then
+        local ok, name = pcall(presets.GetName, key)
+        if ok and name then return name end
+    end
+
+    return tostring(key)
+end
+
+-- What a context dropdown offers: leave it alone, any preset, or undo.
+function Installer:AutoSwitchTargets()
+    local targets = { { value = "none", label = "No change" } }
+
+    local ref = Modules:Ref(Modules.byKey.performance)
+    local presets = ref and ref.Presets
+    if presets and presets.order then
+        for _, key in ipairs(presets.order) do
+            local preset = presets.presets and presets.presets[key]
+            if preset then
+                targets[#targets + 1] = { value = key, label = preset.name }
+            end
+        end
+    end
+
+    targets[#targets + 1] = { value = "restore", label = "My original settings" }
+    return targets
 end
 
 --------------------------------------------------------------------------------
