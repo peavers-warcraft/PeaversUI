@@ -332,6 +332,91 @@ function Wizard:RefreshFooter()
 end
 
 --------------------------------------------------------------------------------
+-- Preview mode
+--
+-- While a layout is on screen the installer gets out of the way entirely and
+-- leaves one small strip behind. Shrinking the window instead was the first
+-- idea and it was wrong: the frames a layout moves are the ones a 760px window
+-- sits on top of, and half of Standard is underneath it.
+--
+-- The strip is deliberately tiny and deliberately unmissable. Somebody who wandered
+-- off mid-preview has to be able to find their way back to an undo, and the
+-- alternative - no marker at all - is how a preview becomes a state you are
+-- stuck in without knowing it.
+--------------------------------------------------------------------------------
+
+local previewBar ---@type Frame
+
+local function BuildPreviewBar()
+    previewBar = CreateFrame("Frame", "PeaversUIPreviewBar", UIParent, "BackdropTemplate") --[[@as Frame]]
+    previewBar:SetSize(360, 40)
+    previewBar:SetPoint("TOP", UIParent, "TOP", 0, -80)
+    previewBar:SetFrameStrata("DIALOG")
+    previewBar:SetClampedToScreen(true)
+    previewBar:SetMovable(true)
+    previewBar:EnableMouse(true)
+    previewBar:RegisterForDrag("LeftButton")
+    previewBar:SetScript("OnDragStart", function(self) self:StartMoving() end)
+    previewBar:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
+
+    previewBar:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    previewBar:SetBackdropColor(C.bgBase[1], C.bgBase[2], C.bgBase[3], 0.97)
+    previewBar:SetBackdropBorderColor(C.accent[1], C.accent[2], C.accent[3], 1)
+
+    previewBar.label = W:CreateLabel(previewBar, "", { color = C.text })
+    previewBar.label:SetPoint("LEFT", 12, 0)
+
+    local undo = W:CreateButton(previewBar, "Undo", {
+        variant = "secondary",
+        width = 70,
+        height = 24,
+        onClick = function() Wizard:ExitPreview(true) end,
+    })
+    undo:SetPoint("RIGHT", -10, 0)
+
+    local back = W:CreateButton(previewBar, "Keep looking", {
+        variant = "primary",
+        width = 110,
+        height = 24,
+        onClick = function() Wizard:ExitPreview(false) end,
+    })
+    back:SetPoint("RIGHT", undo, "LEFT", -6, 0)
+
+    previewBar:Hide()
+end
+
+-- Hand the screen over to the layout being previewed.
+function Wizard:EnterPreview(layoutKey)
+    if not previewBar then BuildPreviewBar() end
+
+    local layout = PUI.Layouts:Get(layoutKey)
+    previewBar.label:SetText("Previewing: " .. (layout and layout.name or layoutKey))
+
+    if frame then frame:Hide() end
+    previewBar:Show()
+end
+
+-- Come back to the installer. `revert` puts the old settings back; without it
+-- the preview stays on screen behind the window, which is what somebody
+-- comparing two layouts wants.
+function Wizard:ExitPreview(revert)
+    if previewBar then previewBar:Hide() end
+
+    if revert then
+        PUI.Preview:Revert()
+    end
+
+    if frame then
+        frame:Show()
+        self:Render()
+    end
+end
+
+--------------------------------------------------------------------------------
 -- Show / hide
 --------------------------------------------------------------------------------
 
@@ -356,6 +441,15 @@ end
 
 function Wizard:Hide()
     if frame then frame:Hide() end
+    if previewBar then previewBar:Hide() end
+
+    -- Closing the installer without finishing is backing out, and a preview left
+    -- applied would be exactly the silent change this whole design promises not
+    -- to make. Keeping one is a decision, and it has its own button.
+    if PUI.Preview:IsActive() then
+        PUI.Preview:Revert()
+        PeaversCommons.Utils.Print(PUI, "Preview undone - your settings are back as they were.")
+    end
 end
 
 function Wizard:Toggle()

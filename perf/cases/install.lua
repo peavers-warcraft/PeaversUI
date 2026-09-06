@@ -32,6 +32,9 @@
 --   * A "none" baseline switches auto-switch off, because leave-my-graphics-
 --     alone has to mean alone - but a layout-only apply, which never asked the
 --     question, must not touch any of it.
+--   * The live preview round-trips exactly. Undo has to restore every setting
+--     the layout wrote AND remove the ones it created, or a preview somebody
+--     rejected leaves pieces of itself behind.
 --
 -- The UI files are deliberately not loaded: Wizard and Steps are built out of
 -- PeaversCommons.Widgets, which is a different addon, and stubbing a widget
@@ -347,8 +350,9 @@ Load("Utils/Config.lua")
 Load("Core/Modules.lua")
 Load("Core/Layouts.lua")
 Load("Core/Installer.lua")
+Load("Core/Preview.lua")
 
-assert(PUI.Config and PUI.Modules and PUI.Layouts and PUI.Installer,
+assert(PUI.Config and PUI.Modules and PUI.Layouts and PUI.Installer and PUI.Preview,
     "engine did not load: check the file order against PeaversUI.toc")
 
 local Modules = PUI.Modules
@@ -605,6 +609,114 @@ assert(evaluations == evaluationsBefore, "a layout-only apply must not evaluate"
 assert(PUF.Config.units.player.x == -210, "the compact layout should still have been applied")
 
 --------------------------------------------------------------------------------
+-- Live preview round-trips exactly
+--
+-- The preview is the one thing in this addon that writes before the player has
+-- pressed Install, so the promise it makes - that Undo puts everything back
+-- exactly - is the one worth testing hardest.
+--
+-- The subtle half is absence. Writing `widgets.calendar = "hidden"` over a table
+-- that never had a `calendar` key leaves a value behind that a naive restore has
+-- no way to know should be gone, and the UI quietly keeps a piece of a layout
+-- the player undid. The fixture below starts with an empty `widgets` table on
+-- purpose so that a restore which only puts old values back, rather than also
+-- removing new ones, fails here.
+--------------------------------------------------------------------------------
+
+-- Bookkeeping the fixture and ConfigManager hang off a config, none of it a
+-- setting. `saves` in particular changes on every write, so leaving it in would
+-- make the comparison fail for the one reason that does not matter.
+local NOT_A_SETTING = {
+    saves = true, addon = true, defaults = true, dbName = true,
+    UNIT_ORDER = true, UNIT_LABELS = true,
+}
+
+local function Fingerprint(value, out, path, depth)
+    out = out or {}
+    path = path or ""
+    depth = depth or 0
+
+    if type(value) ~= "table" then
+        out[#out + 1] = path .. "=" .. tostring(value)
+        return out
+    end
+
+    local keys = {}
+    for key in pairs(value) do
+        if type(value[key]) ~= "function" and not (depth == 0 and NOT_A_SETTING[key]) then
+            keys[#keys + 1] = tostring(key)
+        end
+    end
+    table.sort(keys)
+    for _, key in ipairs(keys) do
+        Fingerprint(value[key], out, path .. "." .. key, depth + 1)
+    end
+    return out
+end
+
+local function Snapshot()
+    local out = {}
+    local names = { "unitframes", "minimap", "tooltip", "systembars" }
+    for index, config in ipairs({ PUF.Config, PMM.Config, PTT.Config, PSB.Config }) do
+        Fingerprint(config, out, names[index], 0)
+    end
+    return out
+end
+
+-- The first place two snapshots disagree, named. "did not restore exactly" with
+-- no pointer is a miserable thing to debug six months from now.
+local function FirstDifference(a, b)
+    for index = 1, math.max(#a, #b) do
+        if a[index] ~= b[index] then
+            return "expected " .. tostring(a[index]) .. ", got " .. tostring(b[index])
+        end
+    end
+    return nil
+end
+
+-- Start from a known, non-default state so the restore has something real to put
+-- back rather than coincidentally matching the defaults.
+PMM.Config.widgets = {}
+PMM.Config.size = 199
+PMM.Config.visibility = "always"
+PTT.Config.anchorMode = "cursor"
+PUF.Config.units.player.x = -111
+PUF.Config.units.player.healthColorMode = "class"
+PSB.Config.barSpacing = 7
+Modules:SetEnabled(Modules.byKey.minimap, true)
+Modules:SetEnabled(Modules.byKey.tooltip, true)
+
+local before = Snapshot()
+assert(PMM.Config.widgets.calendar == nil, "fixture should start with no widget dispositions")
+
+local previewChoices = Installer:NewChoices("standard")
+local started, reason = PUI.Preview:Start("standard", previewChoices)
+assert(started, "preview did not start: " .. tostring(reason))
+assert(PUI.Preview:IsActive(), "preview should be active once started")
+
+-- It really applied - a preview that does nothing would pass the restore test.
+assert(PMM.Config.size == 155, "preview did not apply the layout")
+assert(PMM.Config.widgets.calendar == "hidden", "preview did not write the new sub-table key")
+assert(PUF.Config.units.player.x == -429, "preview did not apply unit frames")
+assert(PUI.Config.previewRestore ~= nil, "the restore must be on disk before the first write")
+
+assert(PUI.Preview:Revert(), "revert should report success")
+assert(not PUI.Preview:IsActive(), "preview should not be active after a revert")
+assert(PUI.Config.previewRestore == nil, "the restore must be cleared once used")
+
+assert(PMM.Config.widgets.calendar == nil,
+    "revert left a key behind that did not exist before the preview")
+local difference = FirstDifference(before, Snapshot())
+assert(not difference, "revert did not put every setting back exactly: " .. tostring(difference))
+
+-- Keep is the other exit: it stops tracking without putting anything back.
+PUI.Preview:Start("raid", previewChoices)
+assert(PUI.Preview:Keep(), "keep should report success")
+assert(not PUI.Preview:IsActive(), "keep should end the preview")
+assert(PUI.Config.previewRestore == nil, "keep must clear the outstanding restore")
+assert(PUF.Config.units.player.x == -300, "keep must leave the previewed layout in place")
+
+--------------------------------------------------------------------------------
 -- Idle
 --
 -- The pack installs no OnUpdate on anything. Every frame it could have made is
@@ -637,5 +749,12 @@ return {
         idleCallsPerSecond = 0,
         notes = layoutsChecked .. " layouts, " .. keysChecked ..
                 " module blocks verified key by key",
+    },
+    {
+        name = "live preview applied and undone",
+        callsPerFrame = 0,
+        idleCallsPerSecond = 0,
+        notes = "every setting restored exactly, including keys the layout " ..
+                "created that did not exist before",
     },
 }

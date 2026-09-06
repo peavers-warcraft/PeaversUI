@@ -69,6 +69,37 @@ PeaversCommons.SlashCommands:Register(addonName, "pui", {
     end,
     apply = ApplyLayoutByName,
     layout = ApplyLayoutByName,
+    preview = function(rest)
+        local key = rest and rest:trim():lower() or ""
+        if key == "" then key = PUI.Config.layout or "standard" end
+
+        local ok, reason = PUI.Preview:Start(key, PUI.Installer:NewChoices(key))
+        if ok then
+            local layout = PUI.Layouts:Get(key)
+            Utils.Print(PUI, "Previewing " .. (layout and layout.name or key) ..
+                ". /pui undo puts your settings back, /pui keep makes it stick.")
+        else
+            Utils.Print(PUI, reason or "Could not preview that layout.")
+        end
+    end,
+    undo = function()
+        if PUI.Preview:Revert() then
+            Utils.Print(PUI, "Preview undone - your settings are back as they were.")
+        else
+            Utils.Print(PUI, "Nothing to undo.")
+        end
+    end,
+    keep = function()
+        -- Also the answer to the login message: it clears the outstanding
+        -- restore without touching anything on screen.
+        if PUI.Preview:Keep() or PUI.Config.previewRestore then
+            PUI.Config.previewRestore = nil
+            PUI.Config:Save()
+            Utils.Print(PUI, "Kept. The previewed layout is now just your settings.")
+        else
+            Utils.Print(PUI, "Nothing being previewed.")
+        end
+    end,
     status = function()
         local installed = PUI.Config.installedVersion
         Utils.Print(PUI, installed
@@ -99,6 +130,9 @@ PeaversCommons.SlashCommands:Register(addonName, "pui", {
         print("  /pui - Open the installer")
         print("  /pui settings - Open the Peavers UI settings page")
         print("  /pui apply <layout> - Apply a layout without the wizard")
+        print("  /pui preview <layout> - Put a layout on screen to look at")
+        print("  /pui undo - Put your settings back after a preview")
+        print("  /pui keep - Stop treating a previewed layout as temporary")
         print("  /pui status - What is installed, and what is switched on")
         print("  /pui reset - Offer the installer again at next login")
     end,
@@ -134,6 +168,14 @@ PeaversCommons.Events:Init(addonName, function()
     PeaversCommons.Events:RegisterEvent("PLAYER_ENTERING_WORLD", function()
         if PUI.firstRunChecked then return end
         PUI.firstRunChecked = true
+
+        -- A restore left on disk means the last session ended mid-preview. Said
+        -- out loud rather than acted on: waking up to a UI that rearranged
+        -- itself while you were reading the login screen is the exact surprise
+        -- the preview design exists to avoid.
+        if PUI.Preview:AnnouncePending() then
+            return
+        end
 
         local wants = PUI.Config:NeedsInstall()
             or (PUI.Config.promptOnUpdate and PUI.Config:NeedsUpdate())

@@ -138,8 +138,9 @@ Steps.list = {}
 
 Steps.list.welcome = {
     title = "Set up your interface",
-    subtitle = "Eight addons, one pass. Nothing on this screen or the next three " ..
-               "changes anything - the installer only writes when you press Install.",
+    subtitle = "Eight addons, one pass. Nothing is written until you press Install " ..
+               "- the one exception is the preview button two screens along, which " ..
+               "is labelled as such and undoes itself.",
 
     Build = function(_, page, _)
         local width = PUI.Wizard:ContentWidth()
@@ -277,19 +278,34 @@ Steps.list.modules = {
 
 Steps.list.layout = {
     title = "Pick a layout",
-    subtitle = "Where things sit and how big they are. Every value a layout sets is " ..
-               "an ordinary setting afterwards, so nothing here is a decision you " ..
-               "are stuck with.",
+    subtitle = "Where things sit and how big they are. The panel on the right is " ..
+               "drawn from the layout itself, at your screen's shape - and the " ..
+               "button under it puts the real thing on screen so you can look at " ..
+               "it properly.",
 
     Build = function(_, page, choices)
         local width = PUI.Wizard:ContentWidth()
+        local gutter = 20
+        local previewWidth = 300
+        local cardWidth = width - previewWidth - gutter
+
         local cards = {}
-        local y = -2
+        local preview, caption, previewButton
 
         local function Select(key)
             choices.layout = key
             for cardKey, card in pairs(cards) do
                 card:SetSelected(cardKey == key)
+            end
+
+            if preview then
+                preview:SetLayout(key, choices)
+                caption:SetText(preview:Caption(key))
+            end
+
+            if previewButton then
+                local layout = Layouts:Get(key)
+                previewButton:SetLabel("Show me " .. (layout and layout.name or key))
             end
 
             -- The graphics step takes its starting values from the layout, right
@@ -308,10 +324,14 @@ Steps.list.layout = {
             end
         end
 
+        ------------------------------------------------------------------------
+        -- Left: the four layouts
+        ------------------------------------------------------------------------
+        local y = -2
         for _, entry in ipairs(Layouts:Sorted()) do
             local card = SelectCard(page, {
-                width = width - 4,
-                height = 78,
+                width = cardWidth,
+                height = 82,
                 title = entry.layout.name,
                 tagline = entry.layout.tagline,
                 blurb = entry.layout.blurb,
@@ -319,13 +339,57 @@ Steps.list.layout = {
             })
             card:SetPoint("TOPLEFT", 0, y)
             cards[entry.key] = card
-            y = y - 84
+            y = y - 88
         end
+
+        ------------------------------------------------------------------------
+        -- Right: the schematic, and the button that makes it real
+        ------------------------------------------------------------------------
+        local previewX = cardWidth + gutter
+
+        preview = PUI.LayoutPreview:Create(page, { width = previewWidth })
+        preview:SetPoint("TOPLEFT", previewX, -2)
+
+        caption = W:CreateLabel(page, "", {
+            font = "GameFontNormalSmall",
+            color = C.textMuted,
+            width = previewWidth,
+            wrap = true,
+        })
+        caption:SetPoint("TOPLEFT", previewX, -(preview:GetHeight() + 10))
+
+        local buttonY = -(preview:GetHeight() + 34)
+
+        previewButton = W:CreateButton(page, "Show me", {
+            variant = "secondary",
+            width = previewWidth,
+            onClick = function()
+                local ok, reason = PUI.Preview:Start(choices.layout, choices)
+                if ok then
+                    PUI.Wizard:EnterPreview(choices.layout)
+                else
+                    PeaversCommons.Utils.Print(PUI, reason or "Could not preview that layout.")
+                end
+            end,
+        })
+        previewButton:SetPoint("TOPLEFT", previewX, buttonY)
+
+        -- The honest footnote. Everything else in this wizard is a plan; this
+        -- one button is not, so it says so rather than being discovered.
+        local warning = W:CreateLabel(page,
+            "The only button in this installer that changes anything before you " ..
+            "press Install. It is undone with one click, and undone anyway if you " ..
+            "close the installer without finishing.", {
+            font = "GameFontNormalSmall",
+            color = C.textMuted,
+            width = previewWidth,
+            wrap = true,
+        })
+        warning:SetPoint("TOPLEFT", previewX, buttonY - 32)
 
         Select(choices.layout or "standard")
     end,
 }
-
 --------------------------------------------------------------------------------
 -- 4. Graphics
 --------------------------------------------------------------------------------
@@ -558,7 +622,12 @@ Steps.list.review = {
         local _, ruleY = W:CreateSeparator(page, 0, y, width)
         y = ruleY - 4
 
+        local previewNote = PUI.Preview:IsActive()
+            and "The layout you previewed is on screen now; installing keeps it. "
+            or ""
+
         local note = W:CreateLabel(page,
+            previewNote ..
             "Everything written here lands in each module's own saved settings, " ..
             "where its settings page can edit it afterwards. Run the installer " ..
             "again from /pui at any time to start over.", {
@@ -646,6 +715,11 @@ Steps.list.review = {
             ReloadUI()
             return true
         end
+
+        -- Installing is the strongest possible "keep it". Without this the
+        -- preview would still be outstanding, and closing the window afterwards
+        -- would helpfully undo the install.
+        PUI.Preview:Keep()
 
         self.result = Installer:Apply(choices)
         PUI.Wizard:Render()

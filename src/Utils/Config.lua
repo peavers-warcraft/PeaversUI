@@ -41,6 +41,12 @@ local PUI_DEFAULTS = {
     -- installers.
     promptOnUpdate = false,
 
+    -- Set while a layout is being previewed on screen, and cleared the moment
+    -- the preview is kept or undone. Its presence at login means the last
+    -- session ended mid-preview - a crash, or an alt-F4 - and the settings on
+    -- disk are the preview's rather than the player's. See Core/Preview.lua.
+    previewRestore = nil,
+
     -- The wizard remembers where it was dragged to.
     framePoint = "CENTER",
     frameX = 0,
