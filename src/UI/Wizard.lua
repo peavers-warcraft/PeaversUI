@@ -332,17 +332,17 @@ function Wizard:RefreshFooter()
 end
 
 --------------------------------------------------------------------------------
--- Preview mode
+-- Getting out of the way
 --
--- While a layout is on screen the installer gets out of the way entirely and
--- leaves one small strip behind. Shrinking the window instead was the first
--- idea and it was wrong: the frames a layout moves are the ones a 760px window
--- sits on top of, and half of Standard is underneath it.
+-- The layout screen swaps the real interface as you click, which is useless
+-- while a 760px window is sitting on top of the frames it just moved - and half
+-- of Standard is underneath it. So the window can stand aside entirely, leaving
+-- one small strip behind.
 --
--- The strip is deliberately tiny and deliberately unmissable. Somebody who wandered
--- off mid-preview has to be able to find their way back to an undo, and the
--- alternative - no marker at all - is how a preview becomes a state you are
--- stuck in without knowing it.
+-- The strip is deliberately tiny and deliberately unmissable. Somebody who
+-- wandered off has to be able to find their way back to an undo, and the
+-- alternative - no marker at all - is how a look-at-this becomes a state you
+-- are stuck in without knowing it.
 --------------------------------------------------------------------------------
 
 local previewBar ---@type Frame
@@ -378,9 +378,9 @@ local function BuildPreviewBar()
     })
     undo:SetPoint("RIGHT", -10, 0)
 
-    local back = W:CreateButton(previewBar, "Keep looking", {
+    local back = W:CreateButton(previewBar, "Back to installer", {
         variant = "primary",
-        width = 110,
+        width = 130,
         height = 24,
         onClick = function() Wizard:ExitPreview(false) end,
     })
@@ -389,20 +389,20 @@ local function BuildPreviewBar()
     previewBar:Hide()
 end
 
--- Hand the screen over to the layout being previewed.
+-- Stand aside so the layout on screen can actually be seen.
 function Wizard:EnterPreview(layoutKey)
     if not previewBar then BuildPreviewBar() end
 
     local layout = PUI.Layouts:Get(layoutKey)
-    previewBar.label:SetText("Previewing: " .. (layout and layout.name or layoutKey))
+    previewBar.label:SetText("Trying: " .. (layout and layout.name or layoutKey))
 
     if frame then frame:Hide() end
     previewBar:Show()
 end
 
 -- Come back to the installer. `revert` puts the old settings back; without it
--- the preview stays on screen behind the window, which is what somebody
--- comparing two layouts wants.
+-- the layout stays on screen behind the window, which is what somebody
+-- comparing two of them wants.
 function Wizard:ExitPreview(revert)
     if previewBar then previewBar:Hide() end
 
@@ -448,7 +448,7 @@ function Wizard:Hide()
     -- to make. Keeping one is a decision, and it has its own button.
     if PUI.Preview:IsActive() then
         PUI.Preview:Revert()
-        PeaversCommons.Utils.Print(PUI, "Preview undone - your settings are back as they were.")
+        PeaversCommons.Utils.Print(PUI, "Layout undone - your settings are back as they were.")
     end
 end
 

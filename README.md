@@ -34,41 +34,27 @@ Runs once, on your first login after installing, and never again unless you ask 
 4. **Graphics.** A baseline preset, and a plan for switching between presets by content. The one screen that changes the game rather than the interface, so it gets a screen of its own and an explicit yes.
 5. **A summary you have to agree to.**
 
-**Nothing is written until you press Install** — with one deliberate, labelled exception, below. Ticking boxes and picking layouts only edits a plan, so backing out at any point up to that button leaves the game exactly as it was found. That is the difference between an installer and a settings panel, and it is why the summary screen can promise anything at all.
+**Backing out changes nothing.** The module and graphics screens only edit a plan. The layout screen does change your interface as you click — that is the point of it — but closing the installer without finishing puts every one of those settings back exactly. Either way, walking away leaves the game as it was found.
 
-### Seeing a layout before you take it
+### Trying a layout on
 
-Two ways, and they answer different questions.
+Click one and your interface becomes it. Immediately, on your own screen, at your own resolution, with your own addons around it.
 
-**A schematic, always on screen.** The layout page draws a small picture of your screen next to the four choices, with a box wherever that layout puts a frame. It is generated from the same table the installer applies, so it cannot go stale the way a screenshot does, and it is scaled against your real `UIParent` — so it is drawn at *your* monitor's shape. A layout that fits on ultrawide and crowds on 16:9 shows that here, before you take it. It also respects the choices you already made: a module you switched off on the previous screen is not drawn, and neither is one you have not installed.
+That is the whole of the feature, and it is deliberate. The first version of this screen drew a neat little schematic of where each layout put its frames — and a picture of a layout, however good, answers a question nobody actually has. What people want to know is whether *their* screen looks right, and the only thing that answers that is their screen.
 
-It answers "where does everything go". It does not answer "what does it look like", because it is boxes.
+There is a **Hide the installer and look** button, because a 760-pixel window sits on top of exactly the frames a layout just moved. It leaves a small strip with **Back to installer** and **Undo**, so you can click through all four and compare.
 
-**The real thing, on your actual screen.** Under the schematic is a button that applies the layout for real, hides the installer, and leaves a small strip at the top of the screen with **Keep looking** and **Undo**. Go and look at your frames, then come back and try the next one.
+This means the layout screen writes settings before you have pressed Install, which is worth being explicit about. It is handled carefully:
 
-This is the one button in the installer that changes something before you press Install, so it is labelled as such and it is careful about it:
-
-- The undo is built by walking the layout's own override table and recording the current value at every key it is about to write — so it cannot miss a key the preview touched, or invent one it did not.
-- A key that did not exist before is recorded as *absent*, not skipped. Undoing a preview removes what it created as well as restoring what it changed; otherwise a layout you rejected leaves pieces of itself behind.
-- The undo is written to disk *before* the first change. If the game crashes mid-preview, the next login says so and offers `/pui undo`.
-- Closing the installer without finishing counts as backing out, and undoes the preview for you. Keeping one is a decision with its own button.
-- Graphics are never previewed. The effect is invisible standing in a city, and applying a preset can want a graphics restart — not something to do to somebody who clicked "have a look".
+- **Closing the installer without finishing puts everything back.** Backing out has to mean backing out. Keeping a layout is a decision, and it has its own button — Install.
+- The undo is built by walking the layout's own override table and recording the current value at every key it is about to write, so it cannot miss a key the layout touched or invent one it did not.
+- **A key that did not exist before is recorded as absent, not skipped.** Undoing removes what a layout created as well as restoring what it changed; otherwise a layout you rejected leaves pieces of itself behind.
+- Clicking through all four never compounds: each one puts the previous back before it records anything, so every snapshot is taken against the settings you walked in with.
+- The undo is written to disk *before* the first change. If the game crashes mid-try, the next login says so and offers `/pui undo` — it does not silently rearrange your UI while you are reading the login screen.
+- Graphics are never applied this way. The effect is invisible standing in a city, and applying a preset can want a graphics restart — not something to do to somebody who clicked a card to look at it.
+- In combat the click still selects the layout but does not apply it, and says so, rather than refusing silently.
 
 `/pui preview raid`, `/pui undo` and `/pui keep` do the same thing without the wizard.
-
-Everything the installer writes lands in each module's own saved settings, where that module's own page can edit it afterwards. There is no separate pack-owned copy of your configuration, and nothing you change later gets overwritten behind your back.
-
-### Layouts
-
-| Layout | For |
-|---|---|
-| **Standard** | The author's own interface, transcribed from a live install rather than invented. Four frames in a row low on the screen, flat black health bars, no power bars, tooltips parked in the bottom-right. |
-| **Compact** | Everything drawn smaller and pulled in towards the middle. Suits high resolutions, where the default spread means taking your eyes off your character to read your own health. |
-| **Cinematic** | Chrome out of the way. Chat faded back, addon buttons hidden until you point at them, tooltips parked in a corner instead of following the mouse, target-of-target off. |
-| **Raid** | Information dense. Larger frames, longer aura rows, health in numbers and percent, a 2,000 line chat buffer, and unit tooltips suppressed in combat so nothing sits over the boss. |
-
-Every value a layout sets is an ordinary setting afterwards. `/pui apply cinematic` switches between them without walking the wizard again, and it deliberately leaves your module choices and your graphics settings alone — those are decisions about what you have installed and what your machine can do, and neither changes because you fancied a different arrangement of frames.
-
 ### Graphics that follow the content
 
 This is the part that a pile of frame positions does not give you.
@@ -102,7 +88,7 @@ Negative claims rot quietly, so it is measured rather than asserted. The table b
 
 | Check | Measured | Budget | |
 |---|---:|---:|:--:|
-| Packaged size | 154.7 KB | 175 KB | pass |
+| Packaged size | 141.2 KB | 165 KB | pass |
 | Bundled libraries | 0 | 0 | pass |
 | Widget calls per frame | 0 | 0 | pass |
 | Widget calls per second while idle | 0 | 0 | pass |
@@ -116,7 +102,7 @@ Scenarios driven against the real addon source, outside the game:
 | layout data checked against the module settings | 0.00 | 4 layouts, 203 module blocks verified key by key |
 | live preview applied and undone | 0.00 | every setting restored exactly, including keys the layout created that did not exist before |
 
-<sub>3,989 lines of Lua · 154.7 KB packaged · no bundled libraries</sub>
+<sub>3,649 lines of Lua · 141.2 KB packaged · no bundled libraries</sub>
 
 <!-- perf:end -->
 
@@ -126,7 +112,7 @@ The same case doubles as the engine's integration test, which is the only kind a
 - **Deep merge.** A layout naming `units.player.x` must not blow away `units.player.height`.
 - **Skipping.** A module that is not running is reported, never written to.
 - **Off means off.** An unticked module gets its toggle and none of the layout.
-- **The preview round-trips exactly.** A preview is applied, then undone, and every setting across four modules is compared key by key against a fingerprint taken beforehand — including a sub-table key the layout creates that did not exist before, which is the one a naive restore leaves behind.
+- **Trying a layout round-trips exactly.** One is applied, then undone, and every setting across four modules is compared key by key against a fingerprint taken beforehand — including a sub-table key the layout creates that did not exist before, which is the one a naive restore leaves behind.
 - **Auto-switch is config, not a guess.** The plan is written into PeaversPerformance's own keys and evaluated with `force`, so the context you are standing in is acted on immediately rather than at the next loading screen — and a layout-only apply is asserted to touch none of it.
 
 The layout data is checked too: every key any layout writes has to be a setting the module actually has. That catches a typo here — a layout writing `zoneText` when the addon reads `zoneTextMode` — which is invisible in game. It cannot catch a module renaming one of its own settings; nothing outside that module's repository can.
@@ -136,8 +122,8 @@ The layout data is checked too: every key any layout writes has to be a setting 
 <!-- peavers:features -->
 - A five-screen installer that sets up the whole Peavers interface in one pass
 - Nothing is written until the final screen, so backing out changes nothing
-- A schematic of each layout drawn from the layout data at your own screen's aspect ratio - never a stale screenshot
-- A real live preview: apply a layout, look at it, and undo it exactly, with the undo written to disk first in case the game crashes
+- Click a layout and your interface becomes it on the spot - no screenshots, no mockups, your own screen
+- Every layout you try is undone exactly if you back out, with the undo written to disk first in case the game crashes
 - Four layouts — Standard, Compact, Cinematic and Raid — covering the usual reasons people rearrange a UI
 - Per-module on/off, with anything you switch off handed straight back to Blizzard
 - Graphics presets applied through PeaversPerformance, which snapshots every CVar before it touches one
@@ -152,7 +138,7 @@ The layout data is checked too: every key any layout writes has to be a setting 
 ## Usage
 
 <!-- peavers:usage -->
-The installer opens by itself the first time you log in after installing the pack, a few seconds after the loading screen, and only once. On the layout screen, the panel on the right shows where each layout puts things, and the button under it puts the real thing on your screen with an undo. If you close it with **Not now** it will not ask again — `/pui` reopens it whenever you are ready.
+The installer opens by itself the first time you log in after installing the pack, a few seconds after the loading screen, and only once. On the layout screen, clicking a layout applies it to your interface straight away so you can see it; closing the installer without finishing puts everything back. If you close it with **Not now** it will not ask again — `/pui` reopens it whenever you are ready.
 
 After that, the pack lives in the Peavers settings window under **UI Pack**, alongside every module it installed.
 
@@ -161,9 +147,9 @@ After that, the pack lives in the Peavers settings window under **UI Pack**, alo
 - `/pui` - Open the installer
 - `/pui settings` - Open the Peavers UI settings page
 - `/pui apply <standard|compact|cinematic|raid>` - Switch layouts without the wizard
-- `/pui preview <layout>` - Put a layout on screen to look at
+- `/pui preview <layout>` - Try a layout on without the wizard
 - `/pui undo` - Put your settings back after a preview
-- `/pui keep` - Stop treating a previewed layout as temporary
+- `/pui keep` - Stop treating a tried-on layout as temporary
 - `/pui status` - What is installed, and what is switched on
 - `/pui reset` - Offer the installer again at your next login
 <!-- /peavers:usage -->

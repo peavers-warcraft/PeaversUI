@@ -136,6 +136,15 @@ function Preview:IsActive()
     return self.active ~= nil
 end
 
+-- True when this exact layout is already the one on screen. The layout screen
+-- re-applies its selection whenever it is drawn, so that a lit card always
+-- matches what the player is looking at; without this check, walking back to
+-- that screen would revert and re-apply the same layout for no reason, which is
+-- visible as a flicker.
+function Preview:IsShowing(layoutKey)
+    return self.active ~= nil and self.active.layout == layoutKey
+end
+
 -- @param layoutKey string
 -- @param choices table  which modules are ticked, so the preview matches
 -- @return boolean started, string|nil reason

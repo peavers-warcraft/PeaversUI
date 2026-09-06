@@ -138,9 +138,9 @@ Steps.list = {}
 
 Steps.list.welcome = {
     title = "Set up your interface",
-    subtitle = "Eight addons, one pass. Nothing is written until you press Install " ..
-               "- the one exception is the preview button two screens along, which " ..
-               "is labelled as such and undoes itself.",
+    subtitle = "Eight addons, one pass. On the layout screen your interface " ..
+               "changes as you click, so you can see what you are choosing - and " ..
+               "closing the installer without finishing puts it all back.",
 
     Build = function(_, page, _)
         local width = PUI.Wizard:ContentWidth()
@@ -278,34 +278,31 @@ Steps.list.modules = {
 
 Steps.list.layout = {
     title = "Pick a layout",
-    subtitle = "Where things sit and how big they are. The panel on the right is " ..
-               "drawn from the layout itself, at your screen's shape - and the " ..
-               "button under it puts the real thing on screen so you can look at " ..
-               "it properly.",
+    subtitle = "Click one and your interface changes to it, right now, so you can " ..
+               "look at the thing itself rather than a description of it. Nothing " ..
+               "is committed - closing the installer puts everything back.",
 
     Build = function(_, page, choices)
         local width = PUI.Wizard:ContentWidth()
-        local gutter = 20
-        local previewWidth = 300
-        local cardWidth = width - previewWidth - gutter
-
         local cards = {}
-        local preview, caption, previewButton
+        local status
 
-        local function Select(key)
+        ------------------------------------------------------------------------
+        -- Clicking a card applies it
+        --
+        -- This is the whole design of the screen. A picture of a layout - even a
+        -- good one - answers a question nobody actually has; what people want to
+        -- know is whether their own screen looks right with it, and the only
+        -- thing that answers that is their own screen.
+        --
+        -- Preview:Start reverts whatever is already being previewed before it
+        -- captures, so clicking through all four in a row never compounds: every
+        -- snapshot is taken against the settings the player walked in with.
+        ------------------------------------------------------------------------
+        local function Select(key, applyIt)
             choices.layout = key
             for cardKey, card in pairs(cards) do
                 card:SetSelected(cardKey == key)
-            end
-
-            if preview then
-                preview:SetLayout(key, choices)
-                caption:SetText(preview:Caption(key))
-            end
-
-            if previewButton then
-                local layout = Layouts:Get(key)
-                previewButton:SetLabel("Show me " .. (layout and layout.name or key))
             end
 
             -- The graphics step takes its starting values from the layout, right
@@ -322,72 +319,87 @@ Steps.list.layout = {
             if not choices.autoSwitchTouched then
                 choices.autoSwitch = Layouts:AutoSwitchFor(key)
             end
+
+            if not applyIt then return end
+
+            local ok, reason = PUI.Preview:Start(key, choices)
+            if status then
+                if ok then
+                    local layout = Layouts:Get(key)
+                    status:SetText("On screen now: " .. (layout and layout.name or key) ..
+                        ". Hide the installer to see it properly.")
+                    status:SetTextColor(C.accent[1], C.accent[2], C.accent[3])
+                else
+                    -- Combat, almost always. Selecting still works; it just does
+                    -- not take effect until the fight is over, which is better
+                    -- than refusing the click and saying nothing.
+                    status:SetText(reason or "Could not switch to that layout right now.")
+                    status:SetTextColor(C.amber[1], C.amber[2], C.amber[3])
+                end
+            end
         end
 
         ------------------------------------------------------------------------
-        -- Left: the four layouts
+        -- The four layouts
         ------------------------------------------------------------------------
         local y = -2
         for _, entry in ipairs(Layouts:Sorted()) do
             local card = SelectCard(page, {
-                width = cardWidth,
-                height = 82,
+                width = width - 4,
+                height = 76,
                 title = entry.layout.name,
                 tagline = entry.layout.tagline,
                 blurb = entry.layout.blurb,
-                onClick = function() Select(entry.key) end,
+                onClick = function() Select(entry.key, true) end,
             })
             card:SetPoint("TOPLEFT", 0, y)
             cards[entry.key] = card
-            y = y - 88
+            y = y - 82
         end
 
+        y = y - 6
+        local _, ruleY = W:CreateSeparator(page, 0, y, width)
+        y = ruleY - 6
+
         ------------------------------------------------------------------------
-        -- Right: the schematic, and the button that makes it real
+        -- Getting the window out of the way
         ------------------------------------------------------------------------
-        local previewX = cardWidth + gutter
-
-        preview = PUI.LayoutPreview:Create(page, { width = previewWidth })
-        preview:SetPoint("TOPLEFT", previewX, -2)
-
-        caption = W:CreateLabel(page, "", {
-            font = "GameFontNormalSmall",
-            color = C.textMuted,
-            width = previewWidth,
-            wrap = true,
-        })
-        caption:SetPoint("TOPLEFT", previewX, -(preview:GetHeight() + 10))
-
-        local buttonY = -(preview:GetHeight() + 34)
-
-        previewButton = W:CreateButton(page, "Show me", {
+        local hide = W:CreateButton(page, "Hide the installer and look", {
             variant = "secondary",
-            width = previewWidth,
+            width = 200,
             onClick = function()
-                local ok, reason = PUI.Preview:Start(choices.layout, choices)
-                if ok then
-                    PUI.Wizard:EnterPreview(choices.layout)
-                else
-                    PeaversCommons.Utils.Print(PUI, reason or "Could not preview that layout.")
-                end
+                PUI.Wizard:EnterPreview(choices.layout)
             end,
         })
-        previewButton:SetPoint("TOPLEFT", previewX, buttonY)
+        hide:SetPoint("TOPLEFT", 0, y)
 
-        -- The honest footnote. Everything else in this wizard is a plan; this
-        -- one button is not, so it says so rather than being discovered.
-        local warning = W:CreateLabel(page,
-            "The only button in this installer that changes anything before you " ..
-            "press Install. It is undone with one click, and undone anyway if you " ..
-            "close the installer without finishing.", {
+        status = W:CreateLabel(page, "", {
             font = "GameFontNormalSmall",
             color = C.textMuted,
-            width = previewWidth,
+            width = width - 216,
             wrap = true,
         })
-        warning:SetPoint("TOPLEFT", previewX, buttonY - 32)
+        status:SetPoint("TOPLEFT", 212, y - 3)
 
-        Select(choices.layout or "standard")
+        ------------------------------------------------------------------------
+        -- Arriving on this screen
+        --
+        -- The current selection is applied on arrival rather than waiting for a
+        -- click, so what is on screen always matches the card that is lit. A
+        -- highlighted card describing something the player cannot see is the
+        -- worst state this screen could be in.
+        ------------------------------------------------------------------------
+        local key = choices.layout or "standard"
+        Select(key, not PUI.Preview:IsShowing(key))
+
+        -- Coming back to a layout already on screen: say so, since Select was
+        -- told not to re-apply and therefore wrote no status line.
+        if PUI.Preview:IsShowing(key) and status:GetText() == "" then
+            local layout = Layouts:Get(key)
+            status:SetText("On screen now: " .. (layout and layout.name or key) ..
+                ". Hide the installer to see it properly.")
+            status:SetTextColor(C.accent[1], C.accent[2], C.accent[3])
+        end
     end,
 }
 --------------------------------------------------------------------------------

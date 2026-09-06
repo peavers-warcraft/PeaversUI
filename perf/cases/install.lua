@@ -694,6 +694,11 @@ local started, reason = PUI.Preview:Start("standard", previewChoices)
 assert(started, "preview did not start: " .. tostring(reason))
 assert(PUI.Preview:IsActive(), "preview should be active once started")
 
+-- The layout screen re-applies its selection every time it is drawn, and uses
+-- this to avoid reverting and re-applying the same layout for no reason.
+assert(PUI.Preview:IsShowing("standard"), "IsShowing should recognise the live layout")
+assert(not PUI.Preview:IsShowing("raid"), "IsShowing must not match a different layout")
+
 -- It really applied - a preview that does nothing would pass the restore test.
 assert(PMM.Config.size == 155, "preview did not apply the layout")
 assert(PMM.Config.widgets.calendar == "hidden", "preview did not write the new sub-table key")
