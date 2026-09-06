@@ -135,12 +135,21 @@ function Installer:Preview(choices)
                 ok = true,
             }
         else
-            local has = layout and layout.overrides and layout.overrides[module.key]
-            lines[#lines + 1] = {
-                label = module.label,
-                detail = has and ("on, styled for " .. layout.name) or "on, left at its own settings",
-                ok = true,
-            }
+            local warning = Modules:Warn(module)
+            if warning then
+                lines[#lines + 1] = {
+                    label = module.label,
+                    detail = warning,
+                    ok = false,
+                }
+            else
+                local has = layout and layout.overrides and layout.overrides[module.key]
+                lines[#lines + 1] = {
+                    label = module.label,
+                    detail = has and ("on, styled for " .. layout.name) or "on, left at its own settings",
+                    ok = true,
+                }
+            end
         end
     end
 
@@ -233,7 +242,7 @@ function Installer:Apply(choices)
     -- Three outcomes, kept apart on purpose. "Configured X, Y and Z" that
     -- silently includes the module you just switched off is the kind of summary
     -- that makes people stop reading summaries.
-    local result = { applied = {}, disabled = {}, skipped = {}, failures = {} }
+    local result = { applied = {}, disabled = {}, skipped = {}, failures = {}, warnings = {} }
 
     for _, module in ipairs(Modules:OfRole("display")) do
         if not Modules:IsAvailable(module) then
@@ -253,6 +262,13 @@ function Installer:Apply(choices)
                 end
                 Modules:Refresh(module)
                 result.applied[#result.applied + 1] = module.label
+
+                -- Asked after the write, not before: a module can only tell us
+                -- it is going to ignore the layout once it has been handed one.
+                local warning = Modules:Warn(module)
+                if warning then
+                    result.warnings[#result.warnings + 1] = module.label .. " is " .. warning
+                end
             else
                 result.disabled[#result.disabled + 1] = module.label
             end

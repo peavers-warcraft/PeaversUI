@@ -686,11 +686,18 @@ Steps.list.review = {
         if #result.skipped > 0 then
             Line("Skipped, not installed: " .. table.concat(result.skipped, ", "))
         end
+        -- Warnings before errors: a module that quietly overrides what was just
+        -- written is the thing somebody is about to be confused by, and it is
+        -- not a failure - the install worked, something else is winning.
+        for _, warning in ipairs(result.warnings or {}) do
+            Line(warning, C.amber)
+        end
+
         if #result.failures > 0 then
             for _, failure in ipairs(result.failures) do
                 Line("Failed: " .. failure, C.danger)
             end
-        else
+        elseif #(result.warnings or {}) == 0 then
             Line("No errors.")
         end
 

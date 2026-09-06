@@ -89,6 +89,15 @@ local function BuildFrame()
     -- else in the game dismisses with is a trap, not a wizard.
     table.insert(UISpecialFrames, "PeaversUIInstaller")
 
+    -- UISpecialFrames hides the FRAME, not the wizard - Escape never reaches
+    -- Wizard:Hide, so the cleanup that lives there was skipped and an
+    -- outstanding layout preview was left applied with its undo still sitting in
+    -- SavedVariables. Hanging the cleanup off OnHide catches every route out:
+    -- Escape, the close button, and anything else that hides the frame.
+    frame:SetScript("OnHide", function()
+        Wizard:OnClosed()
+    end)
+
     ----------------------------------------------------------------------------
     -- Header
     ----------------------------------------------------------------------------
@@ -440,10 +449,19 @@ function Wizard:Show(startStep)
 end
 
 function Wizard:Hide()
-    if frame then frame:Hide() end
+    if frame then frame:Hide() end   -- OnHide does the cleanup
+    if previewBar then previewBar:Hide() end
+end
+
+-- Everything that has to happen however the window went away.
+--
+-- Called from the frame's OnHide, so it runs for Escape and the close button
+-- alike, and it has to be safe to call more than once: hiding an already hidden
+-- frame is a no-op but Hide() also calls frame:Hide() explicitly.
+function Wizard:OnClosed()
     if previewBar then previewBar:Hide() end
 
-    -- Closing the installer without finishing is backing out, and a preview left
+    -- Closing the installer without finishing is backing out, and a layout left
     -- applied would be exactly the silent change this whole design promises not
     -- to make. Keeping one is a decision, and it has its own button.
     if PUI.Preview:IsActive() then

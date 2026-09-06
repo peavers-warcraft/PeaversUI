@@ -230,6 +230,14 @@ Layouts.list = {
                 copyStripColors = true,
                 shortChannelNames = true,
                 timestamps = "default",
+                -- Flush into the bottom-left corner. edgeToEdge above is what
+                -- makes x = 0 reachable; this is what actually puts it there.
+                positionEnabled = true,
+                chatPoint = "BOTTOMLEFT",
+                chatX = 0,
+                chatY = 22,
+                chatWidth = 430,
+                chatHeight = 180,
             },
             tooltip = {
                 enabled = true,
@@ -363,6 +371,12 @@ Layouts.list = {
                 paddingTop = 4,
                 paddingBottom = 4,
                 maxLines = 1000,
+                positionEnabled = true,
+                chatPoint = "BOTTOMLEFT",
+                chatX = 0,
+                chatY = 20,
+                chatWidth = 360,
+                chatHeight = 150,
             },
             tooltip = {
                 enabled = true,
@@ -468,6 +482,12 @@ Layouts.list = {
                 timeVisible = 60,
                 showBottomButton = false,
                 tabUnderline = true,
+                positionEnabled = true,
+                chatPoint = "BOTTOMLEFT",
+                chatX = 0,
+                chatY = 20,
+                chatWidth = 380,
+                chatHeight = 150,
             },
             tooltip = {
                 enabled = true,
@@ -582,6 +602,12 @@ Layouts.list = {
                 maxLines = 2000,
                 fading = false,
                 shortChannelNames = true,
+                positionEnabled = true,
+                chatPoint = "BOTTOMLEFT",
+                chatX = 0,
+                chatY = 22,
+                chatWidth = 460,
+                chatHeight = 240,
             },
             tooltip = {
                 enabled = true,

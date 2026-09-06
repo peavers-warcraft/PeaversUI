@@ -195,8 +195,36 @@ Modules.list = {
                 Call(ref, "Channels:Apply")
                 Call(ref, "Buttons:Refresh")
                 Call(ref, "Frames:Refresh")
+                Call(ref, "Tabs:PaintAll")
+                Call(ref, "Position:Apply")
                 Call(ref, "Links:Sync")
             end
+        end,
+
+        -- PeaversChat has bisect modes - /pchat without <group> and /pchat
+        -- minimal - that take features away to find which one is breaking chat,
+        -- and stash the real settings in a backup table while they do. A layout
+        -- written underneath one of those is written and then immediately
+        -- overridden, which from the outside looks exactly like the installer
+        -- not working.
+        --
+        -- It is worth detecting rather than fixing silently: those modes were
+        -- switched on to answer a question, and clearing one behind somebody's
+        -- back would throw away the answer. So the installer says so and leaves
+        -- the decision alone.
+        Warn = function(_, ref)
+            local config = ref.Config
+            if not config then return nil end
+
+            if next(config.minimalBackup or {}) ~= nil then
+                return "in /pchat minimal - run /pchat minimal to leave it, or the layout stays overridden"
+            end
+
+            if next(config.withoutBackup or {}) ~= nil then
+                return "in /pchat without - run /pchat without none, or the layout stays overridden"
+            end
+
+            return nil
         end,
     },
     {
@@ -368,6 +396,15 @@ function Modules:Refresh(module)
         failures[#failures + 1] = module.folder .. " refresh: " .. tostring(err)
     end
     return ok
+end
+
+-- A reason this module will not do what the layout says, or nil when there is
+-- none. Modules opt in by declaring Warn; most have nothing to say.
+function Modules:Warn(module)
+    local ref = self:Ref(module)
+    if not ref or not module.Warn then return nil end
+    local ok, reason = pcall(module.Warn, module, ref)
+    return ok and reason or nil
 end
 
 -- The module's own config table, for the installer to write layout values into.

@@ -388,6 +388,12 @@ local KNOWN = {
         urlLinks = true, urlBrackets = true,
         copyButton = true, copyStripColors = true, copyButtonVisibility = "dim",
         copyIconSize = 11, shortChannelNames = true, timestamps = "default",
+        -- Where the window sits. Distinct from edgeToEdge, which only removes
+        -- the clamping inset - see PeaversChat/src/Core/Position.lua.
+        positionEnabled = false, chatPoint = "BOTTOMLEFT",
+        chatX = 0, chatY = 22, chatWidth = 0, chatHeight = 0,
+        -- The bisect backups. Their presence is what Modules.Warn reads.
+        withoutBackup = {}, minimalBackup = {},
     },
 }
 
@@ -720,6 +726,50 @@ assert(PUI.Preview:Keep(), "keep should report success")
 assert(not PUI.Preview:IsActive(), "keep should end the preview")
 assert(PUI.Config.previewRestore == nil, "keep must clear the outstanding restore")
 assert(PUF.Config.units.player.x == -300, "keep must leave the previewed layout in place")
+
+--------------------------------------------------------------------------------
+-- A module that will override the layout says so
+--
+-- PeaversChat has bisect modes that take features away and stash the real
+-- settings in a backup table. A layout written underneath one is written and
+-- then immediately overridden, which from the outside is indistinguishable from
+-- the installer not working - and that is exactly what it looked like the first
+-- time it happened. The install must name it rather than report success.
+--------------------------------------------------------------------------------
+
+local chatModule = Modules.byKey.chat
+
+-- The fixture leaves PeaversChat absent everywhere else, so it is introduced
+-- here and withdrawn again afterwards.
+local PCHAT = { Config = FakeConfig({
+    enabled = true, withoutBackup = {}, minimalBackup = {},
+}) }
+function PCHAT.Config:Save() Hop() return true end
+_G.PeaversChat = PCHAT
+
+assert(Modules:Warn(chatModule) == nil, "a healthy module should have nothing to warn about")
+
+PCHAT.Config.withoutBackup = { showSocialButton = false }
+local warning = Modules:Warn(chatModule)
+assert(warning and warning:find("without"), "a withdrawn module must be reported: " .. tostring(warning))
+
+PCHAT.Config.withoutBackup = {}
+PCHAT.Config.minimalBackup = { styleTabs = true }
+warning = Modules:Warn(chatModule)
+assert(warning and warning:find("minimal"), "minimal mode must be reported: " .. tostring(warning))
+
+-- And it has to reach the install result, not just the helper.
+PCHAT.Config.minimalBackup = {}
+PCHAT.Config.withoutBackup = { showSocialButton = false }
+local warnChoices = Installer:NewChoices("standard")
+warnChoices.graphicsPreset = "none"
+warnChoices.autoSwitch = nil
+local warnResult = Installer:Apply(warnChoices)
+assert(#warnResult.warnings == 1 and warnResult.warnings[1]:find("Chat is in"),
+    "the install result must carry the warning")
+assert(#warnResult.failures == 0, "a bisect mode is not a failure")
+
+_G.PeaversChat = nil
 
 --------------------------------------------------------------------------------
 -- Idle
