@@ -196,7 +196,7 @@ Modules.list = {
                 Call(ref, "Buttons:Refresh")
                 Call(ref, "Frames:Refresh")
                 Call(ref, "Tabs:PaintAll")
-                Call(ref, "Position:Apply")
+                Call(ref, "Position:Reapply")
                 Call(ref, "Links:Sync")
             end
         end,
