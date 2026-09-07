@@ -35,7 +35,9 @@ src\Core\Modules.lua
 src\Core\Layouts.lua
 src\Core\Installer.lua
 src\Core\Preview.lua
+src\Core\Extras.lua
 
+src\UI\CopyBox.lua
 src\UI\Wizard.lua
 src\UI\Steps.lua
 

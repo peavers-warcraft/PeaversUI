@@ -377,6 +377,7 @@ Load("Core/Modules.lua")
 Load("Core/Layouts.lua")
 Load("Core/Installer.lua")
 Load("Core/Preview.lua")
+Load("Core/Extras.lua")
 
 assert(PUI.Config and PUI.Modules and PUI.Layouts and PUI.Installer and PUI.Preview,
     "engine did not load: check the file order against PeaversUI.toc")
@@ -881,6 +882,74 @@ assert(#cleanResult.warnings == 0,
 _G.PeaversChat = nil
 
 --------------------------------------------------------------------------------
+-- The extras list is coherent
+--
+-- Pure data that a person edits by hand, which is exactly the kind of file that
+-- rots: a duplicate key silently shadows an entry, a category typo makes one
+-- vanish from the page with no error, and a profile block with a string but no
+-- instructions gives somebody a blob and no idea what to do with it.
+--
+-- None of that throws in game. It just quietly renders wrong.
+--------------------------------------------------------------------------------
+
+local Extras = PUI.Extras
+local seenKeys = {}
+local validCategory = {}
+for _, category in ipairs(Extras.categories) do
+    validCategory[category] = true
+    assert(Extras.categoryNames[category],
+        "category '" .. category .. "' has no display name")
+end
+
+local extrasChecked, withProfiles = 0, 0
+
+for _, entry in ipairs(Extras.list) do
+    extrasChecked = extrasChecked + 1
+    local where = "extras entry '" .. tostring(entry.key) .. "'"
+
+    assert(entry.key and entry.key ~= "", "an extras entry has no key")
+    assert(not seenKeys[entry.key], "duplicate extras key: " .. tostring(entry.key))
+    seenKeys[entry.key] = true
+
+    assert(entry.name and entry.name ~= "", where .. " has no name")
+    assert(entry.blurb and entry.blurb ~= "", where .. " has no blurb")
+    assert(entry.why and entry.why ~= "", where .. " has no reason to be listed")
+
+    assert(validCategory[entry.category],
+        where .. " is in an unknown category: " .. tostring(entry.category))
+
+    assert(type(entry.folders) == "table" and #entry.folders > 0,
+        where .. " names no addon folder, so it can never be detected")
+    for _, folder in ipairs(entry.folders) do
+        assert(type(folder) == "string" and folder ~= "",
+            where .. " has a bad folder name")
+    end
+
+    -- A url is optional on purpose - an invented CurseForge slug 404s, which is
+    -- worse than no link - but a present one has to look like one.
+    if entry.url then
+        assert(entry.url:match("^https://"), where .. " has a url that is not https")
+    end
+
+    if entry.profile then
+        assert(entry.profile.how and entry.profile.how ~= "",
+            where .. " has a profile block with no import instructions")
+        if Extras:HasProfile(entry) then
+            withProfiles = withProfiles + 1
+        end
+    end
+end
+
+-- Every entry has to be reachable from the page, which walks categories rather
+-- than the flat list. An entry in a category the page never renders is invisible.
+local reachable = 0
+for _, category in ipairs(Extras.categories) do
+    reachable = reachable + #Extras:OfCategory(category)
+end
+assert(reachable == extrasChecked,
+    "some extras entries are not reachable through the categories the page walks")
+
+--------------------------------------------------------------------------------
 -- Idle
 --
 -- The pack installs no OnUpdate on anything. Every frame it could have made is
@@ -913,6 +982,13 @@ return {
         idleCallsPerSecond = 0,
         notes = layoutsChecked .. " layouts, " .. keysChecked ..
                 " module blocks verified key by key",
+    },
+    {
+        name = "extras list checked",
+        callsPerFrame = 0,
+        idleCallsPerSecond = 0,
+        notes = extrasChecked .. " recommended addons, " .. withProfiles ..
+                " with a shared profile string",
     },
     {
         name = "live preview applied and undone",

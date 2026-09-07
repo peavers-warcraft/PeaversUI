@@ -64,6 +64,9 @@ PeaversCommons.SlashCommands:Register(addonName, "pui", {
     settings = function()
         PUI.ConfigUI:OpenOptions()
     end,
+    extras = function()
+        PUI.ConfigUI:OpenOptions("extras")
+    end,
     config = function()
         PUI.ConfigUI:OpenOptions()
     end,
@@ -129,6 +132,7 @@ PeaversCommons.SlashCommands:Register(addonName, "pui", {
         Utils.Print(PUI, "Commands:")
         print("  /pui - Open the installer")
         print("  /pui settings - Open the Peavers UI settings page")
+        print("  /pui extras - Addons this pack works alongside")
         print("  /pui apply <layout> - Apply a layout without the wizard")
         print("  /pui preview <layout> - Put a layout on screen to look at")
         print("  /pui undo - Put your settings back after a preview")

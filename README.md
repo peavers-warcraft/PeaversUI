@@ -84,6 +84,16 @@ The switching itself is PeaversPerformance''s, not this pack''s — it snapshots
 
 Two rules keep it honest. Choosing **Leave my graphics settings alone** as the baseline switches auto-switching off too — alone means alone. And `/pui apply <layout>`, which never asks the graphics question, never touches any of it: changing your mind about frame positions will not quietly undo a plan you set up weeks ago.
 
+## More stuff
+
+The pack deliberately leaves several things alone — group frames, nameplates, action bars, boss timers — because each of them deserves a specialist, and there are good ones already. The **More stuff** page lists what the author runs alongside this, whether you already have it, and why it is there.
+
+Where a profile has been shared, a button copies a string to paste into that addon's own import box.
+
+**The pack never writes into another addon's saved variables.** That is the obvious implementation and it is the wrong one: it means reaching into a file another author owns, against a schema that changes without notice, before that addon has loaded and read it — and there is no undo. A string pasted into the addon's own import box goes through that addon's validation and migration, and fails safely and legibly when it is out of date. One extra paste, better in every other way.
+
+Open it with `/pui extras`, or from the Peavers settings window.
+
 ## Measured performance
 
 An installer is an odd thing to publish a performance budget for, which is exactly why it has one. The claim is narrow and easy to state: **this addon does its work once and then stops existing.** It draws nothing until you open the installer, installs no `OnUpdate`, starts no ticker, and registers no combat events. After the install it is Lua sitting still.
@@ -96,7 +106,7 @@ Negative claims rot quietly, so it is measured rather than asserted. The table b
 
 | Check | Measured | Budget | |
 |---|---:|---:|:--:|
-| Packaged size | 149.4 KB | 165 KB | pass |
+| Packaged size | 171.5 KB | 200 KB | pass |
 | Bundled libraries | 0 | 0 | pass |
 | Widget calls per frame | 0 | 0 | pass |
 | Widget calls per second while idle | 0 | 0 | pass |
@@ -108,9 +118,10 @@ Scenarios driven against the real addon source, outside the game:
 | installing the pack, four modules and a graphics preset | 0.00 | 30 calls into the module addons for the whole install, 0 frames created; happens once |
 | idle, after installing | 0.00 | no OnUpdate, no ticker, no combat events: the pack does nothing at all once the installer has closed |
 | layout data checked against the module settings | 0.00 | 4 layouts, 226 module blocks verified key by key |
+| extras list checked | 0.00 | 11 recommended addons, 0 with a shared profile string |
 | live preview applied and undone | 0.00 | every setting restored exactly, including keys the layout created that did not exist before |
 
-<sub>3,839 lines of Lua · 149.4 KB packaged · no bundled libraries</sub>
+<sub>4,419 lines of Lua · 171.5 KB packaged · no bundled libraries</sub>
 
 <!-- perf:end -->
 
@@ -158,6 +169,7 @@ After that, the pack lives in the Peavers settings window under **UI Pack**, alo
 - `/pui preview <layout>` - Try a layout on without the wizard
 - `/pui undo` - Put your settings back after a preview
 - `/pui keep` - Stop treating a tried-on layout as temporary
+- `/pui extras` - Addons this pack works alongside, and shared profiles for them
 - `/pui status` - What is installed, and what is switched on
 - `/pui reset` - Offer the installer again at your next login
 <!-- /peavers:usage -->

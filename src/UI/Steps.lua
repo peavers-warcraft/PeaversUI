@@ -734,8 +734,14 @@ Steps.list.review = {
         })
         settings:SetPoint("TOPLEFT", 0, y)
 
+        local installedExtras, totalExtras = PUI.Extras:CountInstalled()
+
         local hint = W:CreateLabel(page,
             "Every module keeps its own page in there, and /peavers opens it any time.\n\n" ..
+            "There is also a More stuff page: " .. totalExtras .. " addons this pack " ..
+            "works alongside but does not ship, in the places it leaves alone - group " ..
+            "frames, nameplates, action bars, boss timers. You already run " ..
+            installedExtras .. " of them.\n\n" ..
             "If any of it is not to your taste, change it there rather than reinstalling - " ..
             "the pack only ever wrote ordinary settings.", {
             font = "GameFontNormalSmall",

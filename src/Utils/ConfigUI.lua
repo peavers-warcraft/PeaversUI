@@ -220,11 +220,124 @@ function ConfigUI:BuildLayoutPage(parentFrame)
 end
 
 --------------------------------------------------------------------------------
+-- More stuff
+--
+-- Addons the pack does not ship but works well alongside, and where one has
+-- been shared, the profile string that sets it up the way the pack's author
+-- runs it.
+--
+-- Deliberately a page rather than a wizard step. Nothing here is part of
+-- installing the interface, none of it can be done by the pack on the player's
+-- behalf, and a screen in the middle of a five-screen wizard that says "here is
+-- some other software you might like" is an advert. As a page somebody opens on
+-- purpose it is a recommendation.
+--------------------------------------------------------------------------------
+
+local EXTRA_STATUS = {
+    loaded   = { text = "installed", color = C.accent },
+    disabled = { text = "not enabled", color = C.amber },
+    missing  = { text = "not installed", color = C.textMuted },
+}
+
+function ConfigUI:BuildExtrasPage(parentFrame)
+    local Extras = PUI.Extras
+    local width = ResolveWidth(parentFrame)
+    local y = -10
+
+    local _, nextY = W:CreateSectionHeader(parentFrame, "More stuff", INDENT, y)
+    y = nextY - 4
+
+    local installed, total = Extras:CountInstalled()
+
+    local intro = W:CreateLabel(parentFrame,
+        "None of this is part of the pack and none of it is needed. It is what " ..
+        "the author runs alongside it, in the places this collection deliberately " ..
+        "leaves alone - group frames, nameplates, action bars, boss timers.\n\n" ..
+        "Where a profile has been shared, the button copies a string to paste " ..
+        "into that addon's own import box. The pack never writes into another " ..
+        "addon's settings: its own import understands its own format, has its own " ..
+        "undo, and fails safely when a string is out of date.\n\n" ..
+        "You have " .. installed .. " of these " .. total .. ".", {
+        font = "GameFontNormalSmall",
+        color = C.textMuted,
+        width = width,
+        wrap = true,
+    })
+    intro:SetPoint("TOPLEFT", INDENT, y)
+    y = y - 96
+
+    for _, category in ipairs(Extras.categories) do
+        local entries = Extras:OfCategory(category)
+        if #entries > 0 then
+            local _, catY = W:CreateSectionHeader(parentFrame,
+                Extras.categoryNames[category] or category, INDENT, y)
+            y = catY - 4
+
+            for _, entry in ipairs(entries) do
+                local status = Extras:Status(entry)
+                local badge = EXTRA_STATUS[status] or EXTRA_STATUS.missing
+
+                local name = W:CreateLabel(parentFrame, entry.name, { color = C.text })
+                name:SetPoint("TOPLEFT", INDENT, y)
+
+                local state = W:CreateLabel(parentFrame, badge.text, {
+                    font = "GameFontNormalSmall",
+                    color = badge.color,
+                })
+                state:SetPoint("TOPLEFT", INDENT + 200, y - 1)
+
+                if Extras:HasProfile(entry) then
+                    local copy = W:CreateButton(parentFrame, "Copy profile", {
+                        variant = "secondary",
+                        width = 110,
+                        onClick = function()
+                            PUI.CopyBox:Show(
+                                entry.name .. " profile",
+                                entry.profile.text,
+                                (entry.profile.how or "") ..
+                                    "  The string is selected already - Ctrl+C.")
+                        end,
+                    })
+                    copy:SetPoint("TOPLEFT", INDENT + 300, y - 4)
+                end
+
+                y = y - 20
+
+                local detail = entry.blurb .. "  " .. entry.why
+                if entry.url then
+                    detail = detail .. "\n" .. entry.url
+                end
+                if not Extras:HasProfile(entry) and entry.profile and entry.profile.how then
+                    detail = detail .. "\nNo profile shared yet. Its own settings: " .. entry.profile.how
+                end
+
+                local text = W:CreateLabel(parentFrame, detail, {
+                    font = "GameFontNormalSmall",
+                    color = C.textMuted,
+                    width = width - 10,
+                    wrap = true,
+                })
+                text:SetPoint("TOPLEFT", INDENT, y)
+
+                -- Three lines of body at most, plus the gap. Measured rather
+                -- than assumed: a wrapped label that is given a fixed height
+                -- overlaps the next row the moment somebody writes a longer
+                -- sentence into the data file.
+                y = y - math.max(34, (text:GetStringHeight() or 30) + 12)
+            end
+
+            y = y - 6
+        end
+    end
+end
+
+--------------------------------------------------------------------------------
 
 function ConfigUI:GetPages()
     return {
         { key = "overview", label = "Overview", builder = function(f) ConfigUI:BuildOverviewPage(f) end },
         { key = "layouts", label = "Layouts", builder = function(f) ConfigUI:BuildLayoutPage(f) end },
+        { key = "extras", label = "More stuff", builder = function(f) ConfigUI:BuildExtrasPage(f) end },
     }
 end
 
@@ -233,10 +346,25 @@ function ConfigUI:BuildIntoFrame(parentFrame)
     return parentFrame
 end
 
-function ConfigUI:OpenOptions()
+--- Open the pack's settings.
+--- @param pageKey? string One of GetPages()' keys, to land on directly.
+function ConfigUI:OpenOptions(pageKey)
     if _G.PeaversConfig and _G.PeaversConfig.MainFrame then
         _G.PeaversConfig.MainFrame:Show()
         _G.PeaversConfig.MainFrame:SelectAddon("PeaversUI")
+
+        -- Landing on a named page is a nicety, and PeaversConfig owns whether
+        -- it is possible - so it is attempted through its own tab API and
+        -- quietly skipped if that is not there. Worst case somebody arrives on
+        -- the Overview and clicks one tab.
+        if pageKey then
+            local content = _G.PeaversConfig.ContentArea
+            local registry = _G.PeaversCommons and _G.PeaversCommons.ConfigRegistry
+            local info = registry and registry:GetAddon("PeaversUI")
+            if content and info and type(content.ShowTabPage) == "function" then
+                pcall(content.ShowTabPage, content, "PeaversUI", info, pageKey)
+            end
+        end
         return
     end
 
