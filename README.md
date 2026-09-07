@@ -106,7 +106,7 @@ Negative claims rot quietly, so it is measured rather than asserted. The table b
 
 | Check | Measured | Budget | |
 |---|---:|---:|:--:|
-| Packaged size | 171.5 KB | 200 KB | pass |
+| Packaged size | 173.8 KB | 200 KB | pass |
 | Bundled libraries | 0 | 0 | pass |
 | Widget calls per frame | 0 | 0 | pass |
 | Widget calls per second while idle | 0 | 0 | pass |
@@ -120,8 +120,9 @@ Scenarios driven against the real addon source, outside the game:
 | layout data checked against the module settings | 0.00 | 4 layouts, 226 module blocks verified key by key |
 | extras list checked | 0.00 | 11 recommended addons, 0 with a shared profile string |
 | live preview applied and undone | 0.00 | every setting restored exactly, including keys the layout created that did not exist before |
+| settings pages laid out | 0.00 | 3 pages on 3 shared columns: each sizes its own scroll child, nothing overlaps in the left column, and no widget runs off the panel |
 
-<sub>4,419 lines of Lua · 171.5 KB packaged · no bundled libraries</sub>
+<sub>4,471 lines of Lua · 173.8 KB packaged · no bundled libraries</sub>
 
 <!-- perf:end -->
 

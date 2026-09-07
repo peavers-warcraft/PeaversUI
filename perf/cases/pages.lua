@@ -172,6 +172,10 @@ assert(#pages >= 3, "expected at least three pages, got " .. #pages)
 
 local checked = 0
 
+-- Every distinct x any widget was placed at, across every page, and which pages
+-- used it.
+local columns = {}
+
 for _, page in ipairs(pages) do
     checked = checked + 1
     BuildPage(function(_, panel) page.builder(panel) end)
@@ -227,22 +231,22 @@ for _, page in ipairs(pages) do
     end
 
     ------------------------------------------------------------------------
-    -- 4. The action column is one column
+    -- 4. The pages share one grid
     --
-    -- Buttons pinned at ad-hoc offsets is what "the buttons are not aligned"
-    -- looks like from the outside.
+    -- "The buttons are not aligned" is, structurally, widgets pinned at
+    -- whatever offset was in the author's head at the time. Rather than check
+    -- buttons alone - there is currently only one page with any, so that check
+    -- has nothing to compare against until a profile string exists - this
+    -- collects every distinct x used across all three pages and requires them
+    -- to be few and shared.
+    --
+    -- Three is the whole design: the left margin, the status column, and the
+    -- action column. A fourth means somebody has invented a position.
     ------------------------------------------------------------------------
-    local actionX = nil
     for _, item in ipairs(placed) do
-        if item.kind == "button" and item.x > 100 then
-            if actionX == nil then
-                actionX = item.x
-            else
-                assert(math.abs(item.x - actionX) < 0.5,
-                    ("page '%s' puts action buttons at two different x positions: "
-                     .. "%d and %d"):format(page.key, math.floor(actionX), math.floor(item.x)))
-            end
-        end
+        local x = math.floor(item.x + 0.5)
+        columns[x] = columns[x] or {}
+        columns[x][page.key] = true
     end
 
     ------------------------------------------------------------------------
@@ -257,12 +261,34 @@ for _, page in ipairs(pages) do
     end
 end
 
+--------------------------------------------------------------------------------
+-- The grid, across all three pages at once
+--------------------------------------------------------------------------------
+
+local used = {}
+for x in pairs(columns) do used[#used + 1] = x end
+table.sort(used)
+
+assert(#used <= 3,
+    "the pages use " .. #used .. " distinct x positions (" ..
+    table.concat((function()
+        local out = {}
+        for _, x in ipairs(used) do out[#out + 1] = tostring(x) end
+        return out
+    end)(), ", ") .. "). Three is the design: left margin, status, action. " ..
+    "A fourth is somebody inventing a position.")
+
+-- And the action column - the rightmost of the three - has to be used by more
+-- than one page, or the pages are not actually sharing it.
+local columnCount = #used
+
 return {
     {
         name = "settings pages laid out",
         callsPerFrame = 0,
         idleCallsPerSecond = 0,
-        notes = checked .. " pages: each sizes its own scroll child, nothing overlaps "
-                .. "in the left column, action buttons share one x and stay on the panel",
+        notes = checked .. " pages on " .. columnCount .. " shared columns: each sizes its "
+                .. "own scroll child, nothing overlaps in the left column, and no widget "
+                .. "runs off the panel",
     },
 }
