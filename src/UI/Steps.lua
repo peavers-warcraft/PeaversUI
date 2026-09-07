@@ -658,8 +658,9 @@ Steps.list.review = {
         local note = W:CreateLabel(page,
             previewNote ..
             "Everything written here lands in each module's own saved settings, " ..
-            "where its settings page can edit it afterwards. Run the installer " ..
-            "again from /pui at any time to start over.", {
+            "which are the same ones Edit Mode edits - so anything the pack sets " ..
+            "can be changed there afterwards. Run the installer again from /pui " ..
+            "at any time to start over.", {
             font = "GameFontNormalSmall",
             color = C.textMuted,
             width = width - 8,
@@ -722,9 +723,13 @@ Steps.list.review = {
         local _, ruleY = W:CreateSeparator(page, 0, y, width)
         y = ruleY - 6
 
-        local settings = W:CreateButton(page, "Open settings", {
+        -- PeaversConfig rather than Edit Mode, even though the settings live in
+        -- Edit Mode now: opening Edit Mode from here would mean touching
+        -- EditModeManagerFrame, which is the classic way an addon taints
+        -- Blizzard's own UI. Its pages say where to go and how to get there.
+        local settings = W:CreateButton(page, "Open the addon pages", {
             variant = "secondary",
-            width = 140,
+            width = 180,
             onClick = function()
                 PUI.Wizard:Hide()
                 if _G.PeaversConfig and _G.PeaversConfig.MainFrame then
@@ -737,13 +742,16 @@ Steps.list.review = {
         local installedExtras, totalExtras = PUI.Extras:CountInstalled()
 
         local hint = W:CreateLabel(page,
-            "Every module keeps its own page in there, and /peavers opens it any time.\n\n" ..
+            "Each module's settings are in Blizzard's Edit Mode now: press Escape, " ..
+            "choose Edit Mode, and select the thing you want to change. Every " ..
+            "module still keeps a page in /peavers explaining what it does.\n\n" ..
             "There is also a More stuff page: " .. totalExtras .. " addons this pack " ..
             "works alongside but does not ship, in the places it leaves alone - group " ..
             "frames, nameplates, action bars, boss timers. You already run " ..
             installedExtras .. " of them.\n\n" ..
-            "If any of it is not to your taste, change it there rather than reinstalling - " ..
-            "the pack only ever wrote ordinary settings.", {
+            "If any of it is not to your taste, change it in Edit Mode rather than " ..
+            "reinstalling - the pack only ever wrote ordinary settings, and that " ..
+            "is where they are edited.", {
             font = "GameFontNormalSmall",
             color = C.textMuted,
             width = width - 160,
