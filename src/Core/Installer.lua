@@ -14,8 +14,9 @@
 --      that changes the game client rather than the interface.
 --
 -- Nothing here is destructive in the way an installer usually is. Every value
--- written lands in the module's own saved variables where its own settings page
--- can edit it afterwards, PeaversPerformance snapshots every CVar before it
+-- written lands in the module's own saved variables - the same ones Edit Mode
+-- edits, so anything the pack sets can be changed there afterwards -
+-- PeaversPerformance snapshots every CVar before it
 -- touches one, and `Preview` answers "what would this change" without changing
 -- anything - which is what the review step is built out of.
 --------------------------------------------------------------------------------
