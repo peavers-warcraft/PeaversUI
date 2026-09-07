@@ -67,6 +67,40 @@ PeaversCommons.SlashCommands:Register(addonName, "pui", {
     extras = function()
         PUI.ConfigUI:OpenOptions("extras")
     end,
+    share = function(rest)
+        local arg = tostring(rest or ""):trim():lower()
+
+        -- The author's half: everything captured, as the exact block of Lua that
+        -- goes into src/Core/Extras.lua. One command, one copy, one paste.
+        if arg == "lua" then
+            local lua = PUI.Harvest:AsLua()
+            if not lua then
+                Utils.Print(PUI, "Nothing captured yet - run /pui share first.")
+                return
+            end
+            PUI.CopyBox:Show("Profiles as Lua", lua,
+                "Paste each block into its entry in src/Core/Extras.lua to ship it.")
+            return
+        end
+
+        if arg == "clear" then
+            PUI.Harvest:Clear()
+            Utils.Print(PUI, "Captured profiles forgotten. Anything shipped with the " ..
+                "pack is untouched.")
+            return
+        end
+
+        local result = PUI.Harvest:CaptureAll()
+        Utils.Print(PUI, #result.captured .. " profile(s) captured from your own addons:")
+        for _, item in ipairs(result.captured) do
+            print(("  |cff4ade80%s|r  %d characters"):format(item.key, item.bytes))
+        end
+        for _, skip in ipairs(result.skipped) do
+            print(("  |cff949494%s: %s|r"):format(skip.key, skip.reason))
+        end
+        print("  /pui extras shows them. /pui share lua gives you the block for " ..
+            "src/Core/Extras.lua.")
+    end,
     config = function()
         PUI.ConfigUI:OpenOptions()
     end,
@@ -133,6 +167,8 @@ PeaversCommons.SlashCommands:Register(addonName, "pui", {
         print("  /pui - Open the installer")
         print("  /pui settings - Open the Peavers UI settings page")
         print("  /pui extras - Addons this pack works alongside")
+        print("  /pui share - Capture your own profiles from those addons")
+        print("  /pui share lua - Those profiles as Lua, ready for Extras.lua")
         print("  /pui apply <layout> - Apply a layout without the wizard")
         print("  /pui preview <layout> - Put a layout on screen to look at")
         print("  /pui undo - Put your settings back after a preview")

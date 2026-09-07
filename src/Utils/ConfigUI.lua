@@ -322,7 +322,42 @@ function ConfigUI:BuildExtrasPage(parentFrame)
         "that addon's own import box. The pack never writes into another addon's " ..
         "settings: its own import understands its own format, has its own undo, " ..
         "and fails safely when a string is out of date.",
-        y, width, { gap = GAP_SECTION })
+        y, width, { gap = GAP_ROW })
+
+    ----------------------------------------------------------------------------
+    -- Capturing your own
+    --
+    -- Every string here comes from that addon's own export function, so it is
+    -- correct by construction. Offered as a button rather than left to a slash
+    -- command because it is how the shipped strings get made, and because
+    -- anybody can reasonably want a Copy button for their own settings.
+    ----------------------------------------------------------------------------
+    local capture = W:CreateButton(parentFrame, "Capture my settings", {
+        variant = "secondary",
+        width = 170,
+        onClick = function()
+            local result = PUI.Harvest:CaptureAll()
+            PeaversCommons.Utils.Print(PUI,
+                #result.captured .. " profile(s) captured from your own addons.")
+            for _, skip in ipairs(result.skipped) do
+                print("  |cff949494" .. skip.key .. ": " .. skip.reason .. "|r")
+            end
+            ConfigUI:OpenOptions("extras")
+        end,
+    })
+    capture:SetPoint("TOPLEFT", INDENT, y)
+
+    local askable = 0
+    for key in pairs(PUI.Harvest.sources) do
+        if PUI.Extras.byKey[key] then askable = askable + 1 end
+    end
+
+    y = y - 26 - GAP_TIGHT
+    y = Paragraph(parentFrame,
+        askable .. " of these can be asked for their settings directly, through their " ..
+        "own export function - so what you get is exactly what that addon would " ..
+        "have given you, in the format its own import expects. The rest have no " ..
+        "export to call.", y, width, { gap = GAP_SECTION })
 
     for _, category in ipairs(Extras.categories) do
         local entries = Extras:OfCategory(category)
@@ -343,7 +378,8 @@ function ConfigUI:BuildExtrasPage(parentFrame)
                 })
                 state:SetPoint("TOPLEFT", INDENT + COL_STATUS, y - 1)
 
-                if Extras:HasProfile(entry) then
+                local profileText, origin = Extras:ProfileText(entry)
+                if profileText then
                     local copy = W:CreateButton(parentFrame, "Copy profile", {
                         variant = "secondary",
                         width = ACTION_WIDTH,
@@ -351,8 +387,8 @@ function ConfigUI:BuildExtrasPage(parentFrame)
                         onClick = function()
                             PUI.CopyBox:Show(
                                 entry.name .. " profile",
-                                entry.profile.text,
-                                (entry.profile.how or "") ..
+                                profileText,
+                                ((entry.profile and entry.profile.how) or "") ..
                                     "  The string is selected already - Ctrl+C.")
                         end,
                     })
@@ -362,7 +398,11 @@ function ConfigUI:BuildExtrasPage(parentFrame)
                 y = y - ROW_HEIGHT
 
                 local detail = entry.blurb .. "  " .. entry.why
-                if not Extras:HasProfile(entry) and entry.profile and entry.profile.how then
+                if profileText then
+                    detail = detail .. (origin == "captured"
+                        and "  Profile captured from your own install."
+                        or "  Profile shared with the pack.")
+                elseif entry.profile and entry.profile.how then
                     detail = detail .. "  No profile shared yet; its own settings are at "
                         .. entry.profile.how
                 end

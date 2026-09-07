@@ -92,6 +92,14 @@ Where a profile has been shared, a button copies a string to paste into that add
 
 **The pack never writes into another addon's saved variables.** That is the obvious implementation and it is the wrong one: it means reaching into a file another author owns, against a schema that changes without notice, before that addon has loaded and read it — and there is no undo. A string pasted into the addon's own import box goes through that addon's validation and migration, and fails safely and legibly when it is out of date. One extra paste, better in every other way.
 
+**Capturing profiles.** Every string offered here comes from that addon's *own* export function — `DandersFrames_Export()`, `Details:ExportCurrentProfile()`, `PlaterAPI:ExportProfile()` — so it is correct by construction and in exactly the format that addon's import expects. If they change the format, their exporter changes with it and this keeps working.
+
+`/pui share`, or the **Capture my settings** button on the page, asks every addon that can be asked and stores what comes back. Anything absent, moved, throwing or returning a stub is skipped with a reason rather than leaving a button that hands you nothing.
+
+That is also how the shipped strings are made: `/pui share lua` gives the exact block to paste into `src/Core/Extras.lua`. A profile you captured yourself always wins over a shipped one, so capturing your own settings never appears to do nothing.
+
+Generating these offline from the saved variables on disk was considered and rejected. It is possible in principle — the compression is LibDeflate and AceSerializer, both pure Lua — but it means reimplementing each addon's profile assembly against a format with no compatibility promise, with no way to test the result short of importing it and looking. A malformed string that imports and is subtly wrong is worse than no button.
+
 Open it with `/pui extras`, or from the Peavers settings window.
 
 ## Measured performance
@@ -106,7 +114,7 @@ Negative claims rot quietly, so it is measured rather than asserted. The table b
 
 | Check | Measured | Budget | |
 |---|---:|---:|:--:|
-| Packaged size | 173.8 KB | 200 KB | pass |
+| Packaged size | 185.4 KB | 200 KB | pass |
 | Bundled libraries | 0 | 0 | pass |
 | Widget calls per frame | 0 | 0 | pass |
 | Widget calls per second while idle | 0 | 0 | pass |
@@ -122,7 +130,7 @@ Scenarios driven against the real addon source, outside the game:
 | live preview applied and undone | 0.00 | every setting restored exactly, including keys the layout created that did not exist before |
 | settings pages laid out | 0.00 | 3 pages on 3 shared columns: each sizes its own scroll child, nothing overlaps in the left column, and no widget runs off the panel |
 
-<sub>4,471 lines of Lua · 173.8 KB packaged · no bundled libraries</sub>
+<sub>4,772 lines of Lua · 185.4 KB packaged · no bundled libraries</sub>
 
 <!-- perf:end -->
 
@@ -171,6 +179,8 @@ After that, the pack lives in the Peavers settings window under **UI Pack**, alo
 - `/pui undo` - Put your settings back after a preview
 - `/pui keep` - Stop treating a tried-on layout as temporary
 - `/pui extras` - Addons this pack works alongside, and shared profiles for them
+- `/pui share` - Capture your own profiles from those addons
+- `/pui share lua` - Those profiles as Lua, ready to paste into Extras.lua
 - `/pui status` - What is installed, and what is switched on
 - `/pui reset` - Offer the installer again at your next login
 <!-- /peavers:usage -->

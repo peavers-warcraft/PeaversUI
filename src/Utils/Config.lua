@@ -41,6 +41,12 @@ local PUI_DEFAULTS = {
     -- installers.
     promptOnUpdate = false,
 
+    -- Profile strings captured from third-party addons on this machine, keyed by
+    -- the Extras entry key. Written by /pui share, read by the More stuff page.
+    -- These are somebody's own settings, not the pack's: the strings that ship
+    -- to everybody live in src/Core/Extras.lua instead.
+    shared = {},
+
     -- Set while a layout is being previewed on screen, and cleared the moment
     -- the preview is kept or undone. Its presence at login means the last
     -- session ended mid-preview - a crash, or an alt-F4 - and the settings on

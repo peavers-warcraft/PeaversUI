@@ -262,10 +262,30 @@ function Extras:Status(entry)
     return "missing"
 end
 
+--- The string behind an entry's Copy button, and where it came from.
+---
+--- Two sources. `shipped` is what is written into this file and reaches
+--- everybody. `captured` is what Harvest asked this machine's own addons for,
+--- and is what the author is looking at while they build a pack - so it wins
+--- when both exist, or capturing your settings would appear to do nothing.
+--- @return string|nil text, string|nil origin  "captured" | "shipped"
+function Extras:ProfileText(entry)
+    local captured = PUI.Config and PUI.Config.shared and PUI.Config.shared[entry.key]
+    if type(captured) == "string" and captured ~= "" then
+        return captured, "captured"
+    end
+
+    local shipped = entry.profile and entry.profile.text
+    if type(shipped) == "string" and shipped ~= "" then
+        return shipped, "shipped"
+    end
+
+    return nil, nil
+end
+
 -- True when there is a string worth offering a Copy button for.
 function Extras:HasProfile(entry)
-    local text = entry.profile and entry.profile.text
-    return type(text) == "string" and text ~= ""
+    return (self:ProfileText(entry)) ~= nil
 end
 
 -- Entries of one category, in the order they are written above.

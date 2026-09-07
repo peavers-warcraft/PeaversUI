@@ -378,6 +378,7 @@ Load("Core/Layouts.lua")
 Load("Core/Installer.lua")
 Load("Core/Preview.lua")
 Load("Core/Extras.lua")
+Load("Core/Harvest.lua")
 
 assert(PUI.Config and PUI.Modules and PUI.Layouts and PUI.Installer and PUI.Preview,
     "engine did not load: check the file order against PeaversUI.toc")
@@ -948,6 +949,88 @@ for _, category in ipairs(Extras.categories) do
 end
 assert(reachable == extrasChecked,
     "some extras entries are not reachable through the categories the page walks")
+
+--------------------------------------------------------------------------------
+-- Capturing profiles from third-party addons
+--
+-- Every string offered on the More stuff page comes from that addon's own
+-- export function, so it is correct by construction and in the format its own
+-- import expects. What has to be got right here is the guarding: an addon that
+-- is absent, has moved its API, throws, or politely returns an empty string must
+-- be skipped with a reason rather than storing a Copy button that hands somebody
+-- nothing.
+--------------------------------------------------------------------------------
+
+local Harvest = PUI.Harvest
+PUI.Config.shared = {}
+
+local REAL = string.rep("aXbYcZ", 40)
+
+-- Nothing installed: everything skipped, nothing stored, no button offered.
+local nothing = Harvest:CaptureAll()
+assert(#nothing.captured == 0, "nothing is installed, so nothing should be captured")
+assert(#nothing.skipped > 0, "absent addons should be reported, not silently ignored")
+assert(next(PUI.Config.shared) == nil, "nothing should have been stored")
+
+-- The three failure shapes, one per source, plus one that works.
+_G.DandersFrames_Export = function() return REAL end
+_G.Details = { ExportCurrentProfile = function() return "" end }
+_G.PlaterAPI = {
+    GetCurrentProfileKey = function() return "Default" end,
+    ExportProfile = function() error("boom") end,
+}
+
+local mixed = Harvest:CaptureAll()
+assert(PUI.Config.shared.dandersframes == REAL, "a working exporter should be stored")
+assert(PUI.Config.shared.details == nil, "an empty string is not a profile")
+assert(PUI.Config.shared.plater == nil, "an exporter that throws must not store anything")
+assert(#mixed.captured == 1, "expected one capture, got " .. #mixed.captured)
+
+local reasons = {}
+for _, skip in ipairs(mixed.skipped) do reasons[skip.key] = skip.reason end
+assert(reasons.plater and reasons.plater:find("errored"), "a throw should be reported as one")
+assert(reasons.details, "an empty return should be reported")
+
+-- Too short to be a profile: exporters that fail politely return stubs, and a
+-- Copy button that hands over eight characters is worse than no button.
+_G.DandersFrames_Export = function() return "short" end
+PUI.Config.shared = {}
+local stub = Harvest:CaptureAll()
+assert(next(PUI.Config.shared) == nil, "a stub return must not be stored")
+assert(#stub.captured == 0, "a stub is not a capture")
+
+-- A captured profile puts a button on the page, and beats a shipped one -
+-- otherwise capturing your own settings would appear to do nothing.
+_G.DandersFrames_Export = function() return REAL end
+Harvest:CaptureAll()
+
+local dandersEntry = PUI.Extras.byKey.dandersframes
+assert(PUI.Extras:HasProfile(dandersEntry), "a captured profile should offer a button")
+
+local text, origin = PUI.Extras:ProfileText(dandersEntry)
+assert(text == REAL and origin == "captured", "captured text should be used and labelled")
+
+dandersEntry.profile.text = "shipped-" .. REAL
+text, origin = PUI.Extras:ProfileText(dandersEntry)
+assert(origin == "captured", "a local capture should win over a shipped string")
+
+PUI.Config.shared = {}
+text, origin = PUI.Extras:ProfileText(dandersEntry)
+assert(origin == "shipped", "with nothing captured, the shipped string is used")
+dandersEntry.profile.text = nil
+
+-- The author's half: what was captured, as the Lua that goes into Extras.lua.
+_G.date = _G.date or function() return "2026-09-06" end
+Harvest:CaptureAll()
+local lua = Harvest:AsLua()
+assert(lua and lua:find("%[==%[") and lua:find(REAL, 1, true),
+    "the shipping block should contain the string in a long-bracket literal")
+assert(lua:find("Extras.lua", 1, true), "the block should say where it goes")
+
+Harvest:Clear()
+assert(Harvest:AsLua() == nil, "nothing captured means nothing to ship")
+
+_G.DandersFrames_Export, _G.Details, _G.PlaterAPI = nil, nil, nil
 
 --------------------------------------------------------------------------------
 -- Idle

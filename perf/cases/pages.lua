@@ -141,6 +141,7 @@ Load("Core/Modules.lua")
 Load("Core/Layouts.lua")
 Load("Core/Installer.lua")
 Load("Core/Extras.lua")
+Load("Core/Harvest.lua")
 Load("Utils/ConfigUI.lua")
 
 assert(PUI.ConfigUI, "settings pages did not load")
