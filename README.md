@@ -197,14 +197,17 @@ After that, the pack lives in the Peavers settings window under **UI Pack**, alo
 
 ### Recommended: PeaversUpdater
 
-Download and install [PeaversUpdater](https://github.com/peavers-warcraft/PeaversUpdater/releases/latest), the desktop updater for the whole Peavers collection. It installs PeaversUI together with every module in the pack, and delivers updates before they reach CurseForge. For a UI pack this is by some distance the easier route — one download rather than eight.
+Download and install [PeaversUpdater](https://github.com/peavers-warcraft/PeaversUpdater/releases/latest), the desktop updater for the whole Peavers collection. It installs PeaversUI together with every module in the pack, and delivers updates before they reach CurseForge — which for a pack of eight addons is the difference between updating once and waiting on eight separate approvals.
 
 ### Alternative: CurseForge
 
-1. Install [PeaversCommons](https://www.curseforge.com/wow/addons/peaverscommons) and [PeaversConfig](https://www.curseforge.com/wow/addons/peaversconfig) — both required
-2. Install whichever modules you want: PeaversUnitFrames, PeaversMiniMap, PeaversChat, PeaversToolTip, PeaversSystemBars, PeaversPerformance
-3. Install PeaversUI
-4. Enable them on the character selection screen, and log in — the installer opens by itself
+1. Download [PeaversUI](https://www.curseforge.com/wow/addons/peaversui) — every module in the pack comes with it
+2. Enable them on the character selection screen, and log in — the installer opens by itself
+
+The pack lists all eight addons as dependencies, so one download brings the
+whole suite. Any module you would rather not run can be switched off on the
+installer's second step, or disabled at the character screen — the pack copes
+with a module being absent and says so on its welcome screen.
 
 ---
 

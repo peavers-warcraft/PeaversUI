@@ -1,10 +1,16 @@
 package-as: PeaversUI
 
+# Every module the pack installs, so downloading PeaversUI brings the whole
+# suite rather than an installer with nothing to install.
+#
+# Required here even though the .toc lists the six display modules as
+# OptionalDeps, because the two mean different things. This decides what
+# CurseForge downloads alongside the pack; the .toc decides whether the pack
+# refuses to load when one of them is switched off in game, and it should not -
+# the installer's second step is a list of modules you are allowed to turn off.
 required-dependencies:
-  - peaversconfig
   - peaverscommons
-
-optional-dependencies:
+  - peaversconfig
   - peaversunitframes
   - peaversminimap
   - peaverschat

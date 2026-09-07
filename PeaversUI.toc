@@ -10,6 +10,7 @@
 
 ## X-Website: https://peavers.io
 ## X-Source-Code: https://github.com/peavers-warcraft/PeaversUI
+## X-Curse-Project-ID: 1686586
 
 # PeaversCommons and PeaversConfig are hard dependencies: the installer is built
 # out of Commons' widgets and hands off to Config's window when it finishes, so
