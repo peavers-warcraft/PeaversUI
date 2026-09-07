@@ -82,6 +82,7 @@ end
 
 --- A wrapping block of body text, measured.
 --- @return number nextY  the y to carry on from, below the text
+--- @return FontString label
 local function Paragraph(parent, text, y, width, opts)
     opts = opts or {}
 
