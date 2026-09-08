@@ -138,9 +138,11 @@ Steps.list = {}
 
 Steps.list.welcome = {
     title = "Set up your interface",
-    subtitle = "Eight addons, one pass. On the layout screen your interface " ..
-               "changes as you click, so you can see what you are choosing - and " ..
-               "closing the installer without finishing puts it all back.",
+    subtitle = "Eight purpose-built addons, one pass. This replaces six things - " ..
+               "unit frames, minimap, chat, tooltips, the FPS readout and your " ..
+               "graphics presets - and leaves your action bars, raid frames, bags " ..
+               "and keybinds alone. On the layout screen your interface changes as " ..
+               "you click, and closing the installer without finishing puts it all back.",
 
     Build = function(_, page, _)
         local width = PUI.Wizard:ContentWidth()
@@ -601,9 +603,10 @@ Steps.list.review = {
         end
 
         self.title = "Ready to install"
-        self.subtitle = "This is everything that will change. Nothing outside this " ..
-                        "list is touched - your keybinds, action bars and Edit Mode " ..
-                        "layout are left alone."
+        self.subtitle = "This is everything that will change, in full. Nothing " ..
+                        "outside this list is touched - your action bars, raid " ..
+                        "frames, bags, character panel, keybinds and Edit Mode " ..
+                        "layout are all left exactly as they are."
         self.nextLabel = "Install"
         self.skipLabel = "Not now"
         self.hideBack = false

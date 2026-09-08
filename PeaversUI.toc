@@ -1,7 +1,7 @@
 ## Interface: 120001, 120005, 120007, 120100
 
 ## Title: |cff3abdf7Peavers|rUI
-## Notes: The Peavers UI pack - an installer that sets up the whole suite in one pass
+## Notes: Eight hand-built addons, benchmarked on every push - unit frames, minimap, chat, tooltips and system bars, set up in one pass. Leaves your action bars, raid frames and bags alone.
 ## Author: Peavers
 ## Version: 1.0.3
 

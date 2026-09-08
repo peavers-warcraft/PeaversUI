@@ -138,6 +138,17 @@ function ConfigUI:BuildOverviewPage(parentFrame)
 
     y = Paragraph(parentFrame, summary, y, width, { gap = GAP_ROW })
 
+    -- The scope is the feature. Said plainly here because it is the one thing
+    -- people assume wrongly about anything calling itself a UI pack: that it has
+    -- taken over the rest of their interface as well.
+    y = Paragraph(parentFrame,
+        "This is not a reskin of the whole game. It replaces six things - unit " ..
+        "frames, minimap, chat, tooltips, the FPS readout and your graphics " ..
+        "presets - each written for that one job and each held to a performance " ..
+        "budget checked on every build. Your action bars, raid frames, bags, " ..
+        "character panel and keybinds are untouched.",
+        y, width, { gap = GAP_ROW })
+
     local run = W:CreateButton(parentFrame,
         installed and "Run the installer again" or "Run the installer", {
         variant = "primary",
