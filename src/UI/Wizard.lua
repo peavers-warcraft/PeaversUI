@@ -359,7 +359,7 @@ end
 local previewBar
 
 local function BuildPreviewBar()
-    previewBar = CreateFrame("Frame", "PeaversUIPreviewBar", UIParent, "BackdropTemplate") --[[@as Frame]]
+    previewBar = CreateFrame("Frame", "PeaversUIPreviewBar", UIParent, "BackdropTemplate") --[[@as PreviewBar]]
     previewBar:SetSize(360, 40)
     previewBar:SetPoint("TOP", UIParent, "TOP", 0, -80)
     previewBar:SetFrameStrata("DIALOG")
