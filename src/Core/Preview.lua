@@ -213,7 +213,7 @@ end
 
 -- Put everything back. Safe to call when nothing is being previewed.
 function Preview:Revert()
-    local state = self.active
+    local state = self.active ---@type table?
     if not state then
         -- Nothing live, but there may be something on disk from a session that
         -- ended badly.

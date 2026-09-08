@@ -354,7 +354,9 @@ end
 -- are stuck in without knowing it.
 --------------------------------------------------------------------------------
 
-local previewBar ---@type Frame
+---@class PreviewBar : Frame
+---@field label FontString
+local previewBar
 
 local function BuildPreviewBar()
     previewBar = CreateFrame("Frame", "PeaversUIPreviewBar", UIParent, "BackdropTemplate") --[[@as Frame]]
