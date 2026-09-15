@@ -30,10 +30,12 @@ local C = W.Colors
 -- therefore the one that sets the floor: a preset card and a context dropdown
 -- side by side both need room for a sentence.
 local FRAME_WIDTH = 760
-local FRAME_HEIGHT = 560
+local FRAME_HEIGHT = 576
 local CONTENT_INSET = 24
 local FOOTER_HEIGHT = 54
-local HEADER_HEIGHT = 76
+-- Room for a two-line subtitle. At 76 the second line of every longer subtitle
+-- ran through the header rule and into the page underneath it.
+local HEADER_HEIGHT = 92
 
 local frame          ---@type Frame
 local contentFrame   ---@type Frame

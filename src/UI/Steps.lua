@@ -52,6 +52,50 @@ local function Dot(parent, status)
     return dot
 end
 
+-- A wrapping block of small text, and how tall it came out.
+--
+-- Every paragraph on these pages goes through here so that nothing below one is
+-- placed by a guess. The installer's text used to be laid out with fixed
+-- advances and single-line labels, and a sentence longer than the author's
+-- screen ran off the right of the window or under the next control. Asking the
+-- font string how tall it actually is costs nothing and is always right.
+local function Paragraph(parent, text, width, opts)
+    opts = opts or {}
+    local label = W:CreateLabel(parent, text, {
+        font = opts.font or "GameFontNormalSmall",
+        color = opts.color or C.textMuted,
+        width = width,
+        wrap = true,
+    })
+    local height = label.GetStringHeight and label:GetStringHeight() or 0
+    return label, math.max(height or 0, opts.minHeight or 12)
+end
+
+-- A checkbox whose description wraps.
+--
+-- W:CreateCheckbox draws its description as a single unbounded line, which is
+-- fine for a settings row and runs straight off the side of this window for
+-- anything longer than a few words. So the box goes in without one and the
+-- description is drawn underneath it at the same indent.
+--
+-- @return frame, number  the checkbox, and the total height it occupies
+local function WrappedCheckbox(parent, label, x, y, width, opts)
+    local check = W:CreateCheckbox(parent, label, {
+        checked = opts.checked,
+        width = width,
+        onChange = opts.onChange,
+    })
+    check:SetPoint("TOPLEFT", x, y)
+
+    if not opts.description then
+        return check, 22
+    end
+
+    local desc, height = Paragraph(parent, opts.description, width - 24)
+    desc:SetPoint("TOPLEFT", x + 24, y - 20)
+    return check, 20 + height + 2
+end
+
 -- A clickable card: a hairline panel that shows which one is chosen by taking
 -- the accent border and a filled left edge.
 --
@@ -84,14 +128,12 @@ local function SelectCard(parent, opts)
         tagline:SetPoint("LEFT", title, "RIGHT", 8, 0)
     end
 
+    -- The card grows to fit its blurb rather than clipping it: `height` is a
+    -- floor, not a promise. Callers advance by card:GetHeight().
     if opts.blurb then
-        local blurb = W:CreateLabel(card, opts.blurb, {
-            font = "GameFontNormalSmall",
-            color = C.textMuted,
-            width = (opts.width or 400) - 28,
-            wrap = true,
-        })
-        blurb:SetPoint("TOPLEFT", 14, -30)
+        local blurb, blurbHeight = Paragraph(card, opts.blurb, (opts.width or 400) - 28)
+        blurb:SetPoint("TOPLEFT", 14, -(opts.blurbTop or 30))
+        card:SetHeight(math.max(opts.height or 76, (opts.blurbTop or 30) + blurbHeight + 10))
     end
 
     local button = CreateFrame("Button", nil, card)
@@ -166,15 +208,12 @@ Steps.list.welcome = {
                 detail = STATUS_WORD[status] .. " - " .. module.blurb
             end
 
-            local text = W:CreateLabel(page, detail, {
-                font = "GameFontNormalSmall",
+            local text, textHeight = Paragraph(page, detail, width - 150, {
                 color = status == "loaded" and C.textMuted or (STATUS_COLOR[status] or C.textMuted),
-                width = width - 150,
-                wrap = false,
             })
             text:SetPoint("TOPLEFT", 140, y - 1)
 
-            y = y - 25
+            y = y - math.max(25, textHeight + 11)
         end
 
         for _, module in ipairs(Modules:OfRole("core")) do Row(module) end
@@ -225,16 +264,17 @@ Steps.list.modules = {
         for _, module in ipairs(Modules:OfRole("display")) do
             local available = Modules:IsAvailable(module)
 
+            local rowHeight = 44
+
             if available then
-                local check = W:CreateCheckbox(page, module.label, {
+                local _, height = WrappedCheckbox(page, module.label, 0, y, width - 8, {
                     checked = choices.modules[module.key] ~= false,
                     description = module.blurb .. "   " .. (module.slash or ""),
-                    width = width - 8,
                     onChange = function(checked)
                         choices.modules[module.key] = checked
                     end,
                 })
-                check:SetPoint("TOPLEFT", 0, y)
+                rowHeight = math.max(rowHeight, height + 8)
             else
                 -- Shown rather than hidden. A module that quietly vanishes from
                 -- the list reads as a bug in the pack; one that is listed as
@@ -243,31 +283,21 @@ Steps.list.modules = {
                 local label = W:CreateLabel(page, module.label, { color = C.textMuted })
                 label:SetPoint("TOPLEFT", 24, y - 2)
 
-                local detail = W:CreateLabel(page, STATUS_WORD[status] .. " - nothing to configure", {
-                    font = "GameFontNormalSmall",
-                    color = C.textMuted,
-                    width = width - 32,
-                    wrap = true,
-                })
+                local detail = Paragraph(page, STATUS_WORD[status] .. " - nothing to configure", width - 32)
                 detail:SetPoint("TOPLEFT", 24, y - 20)
             end
 
-            y = y - 44
+            y = y - rowHeight
         end
 
         y = y - 4
         local _, ruleY = W:CreateSeparator(page, 0, y, width)
         y = ruleY - 4
 
-        local note = W:CreateLabel(page,
+        local note = Paragraph(page,
             "PeaversPerformance is not in this list because on and off is not the " ..
             "question worth asking about it - it gets a screen of its own two steps " ..
-            "from here.", {
-            font = "GameFontNormalSmall",
-            color = C.textMuted,
-            width = width - 8,
-            wrap = true,
-        })
+            "from here.", width - 8)
         note:SetPoint("TOPLEFT", 0, y)
     end,
 }
@@ -354,7 +384,7 @@ Steps.list.layout = {
             })
             card:SetPoint("TOPLEFT", 0, y)
             cards[entry.key] = card
-            y = y - 82
+            y = y - (card:GetHeight() + 6)
         end
 
         y = y - 6
@@ -511,22 +541,14 @@ Steps.list.graphics = {
                 height = 42,
                 title = option.label,
                 tagline = tagline,
+                blurb = option.blurb,
+                blurbTop = 26,
                 onClick = function() SelectPreset(option.value, true) end,
             })
 
-            if option.blurb then
-                local blurb = W:CreateLabel(card, option.blurb, {
-                    font = "GameFontNormalSmall",
-                    color = C.textMuted,
-                    width = leftWidth - 26,
-                    wrap = false,
-                })
-                blurb:SetPoint("TOPLEFT", 14, -24)
-            end
-
             card:SetPoint("TOPLEFT", 0, leftY)
             presetCards[option.value] = card
-            leftY = leftY - 48
+            leftY = leftY - (card:GetHeight() + 6)
         end
 
         ------------------------------------------------------------------------
@@ -536,16 +558,11 @@ Steps.list.graphics = {
             { width = rightWidth })
         rightY = rightY - 2
 
-        local intro = W:CreateLabel(page,
+        local intro, introHeight = Paragraph(page,
             "Apply a different preset when you zone into a raid, a key or a dungeon, " ..
-            "and put it back in the open world. Every switch is announced in chat.", {
-            font = "GameFontNormalSmall",
-            color = C.textMuted,
-            width = rightWidth,
-            wrap = true,
-        })
+            "and put it back in the open world. Every switch is announced in chat.", rightWidth)
         intro:SetPoint("TOPLEFT", rightX, rightY)
-        rightY = rightY - 34
+        rightY = rightY - (introHeight + 8)
 
         enableBox = W:CreateCheckbox(page, "Switch by content", {
             checked = plan.enabled == true,
@@ -619,25 +636,21 @@ Steps.list.review = {
             local label = W:CreateLabel(page, line.label, { color = C.text })
             label:SetPoint("TOPLEFT", 16, y)
 
-            local detail = W:CreateLabel(page, line.detail, {
-                font = "GameFontNormalSmall",
-                color = C.textMuted,
-                width = width - 150,
-                wrap = false,
-            })
+            -- Wraps rather than truncating: the auto-switch line names every
+            -- context it will act on, and is the longest line on the page.
+            local detail, detailHeight = Paragraph(page, line.detail, width - 150)
             detail:SetPoint("TOPLEFT", 140, y - 1)
 
-            y = y - 25
+            y = y - math.max(25, detailHeight + 11)
         end
 
         y = y - 4
 
-        local reset = W:CreateCheckbox(page, "Reset each module first", {
+        local _, resetHeight = WrappedCheckbox(page, "Reset each module first", 0, y, width - 8, {
             checked = choices.resetFirst ~= false,
             description = "Puts every module back to its own defaults before the " ..
                           "layout goes on, so nothing from an earlier setup survives. " ..
                           "Settings you made outside the pack go too.",
-            width = width - 8,
             onChange = function(checked)
                 choices.resetFirst = checked
                 -- The summary above describes what will happen, so it has to be
@@ -645,8 +658,7 @@ Steps.list.review = {
                 PUI.Wizard:Render()
             end,
         })
-        reset:SetPoint("TOPLEFT", 0, y)
-        y = y - 46
+        y = y - (resetHeight + 10)
 
         local _, ruleY = W:CreateSeparator(page, 0, y, width)
         y = ruleY - 4
@@ -655,17 +667,12 @@ Steps.list.review = {
             and "The layout you previewed is on screen now; installing keeps it. "
             or ""
 
-        local note = W:CreateLabel(page,
+        local note = Paragraph(page,
             previewNote ..
             "Everything written here lands in each module's own saved settings, " ..
             "which are the same ones Edit Mode edits - so anything the pack sets " ..
             "can be changed there afterwards. Run the installer again from /pui " ..
-            "at any time to start over.", {
-            font = "GameFontNormalSmall",
-            color = C.textMuted,
-            width = width - 8,
-            wrap = true,
-        })
+            "at any time to start over.", width - 8)
         note:SetPoint("TOPLEFT", 0, y)
     end,
 
@@ -684,15 +691,12 @@ Steps.list.review = {
         local _, nextY = W:CreateSectionHeader(page, "What happened", 0, y, { width = width })
         y = nextY - 2
 
+        -- Failure lines carry whatever the module's error said, which can run
+        -- to two or three lines; a fixed advance drew the next one on top.
         local function Line(text, color)
-            local label = W:CreateLabel(page, text, {
-                font = "GameFontNormalSmall",
-                color = color or C.textMuted,
-                width = width - 8,
-                wrap = true,
-            })
+            local label, height = Paragraph(page, text, width - 8, { color = color })
             label:SetPoint("TOPLEFT", 2, y)
-            y = y - 20
+            y = y - math.max(20, height + 8)
         end
 
         if #result.applied > 0 then
