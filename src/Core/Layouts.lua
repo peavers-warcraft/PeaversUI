@@ -191,6 +191,9 @@ Layouts.list = {
             },
             chat = {
                 enabled = true,
+                -- The same flat black the unit frames are painted with, so the
+                -- corner of the screen reads as one surface rather than two.
+                bgColor = { r = 0, g = 0, b = 0 },
                 -- Fully opaque and borderless. Chat sits in a corner over the
                 -- world for hours; at 0.6 the world behind it competes with the
                 -- text, and the hairline is one more edge to see past.
@@ -371,6 +374,9 @@ Layouts.list = {
             },
             chat = {
                 enabled = true,
+                -- The same flat black the unit frames are painted with, so the
+                -- corner of the screen reads as one surface rather than two.
+                bgColor = { r = 0, g = 0, b = 0 },
                 bgAlpha = 0.55,
                 fontSize = 11,
                 tabFontSize = 11,
@@ -486,6 +492,9 @@ Layouts.list = {
             },
             chat = {
                 enabled = true,
+                -- The same flat black the unit frames are painted with, so the
+                -- corner of the screen reads as one surface rather than two.
+                bgColor = { r = 0, g = 0, b = 0 },
                 background = true,
                 bgAlpha = 0.35,
                 border = false,
@@ -612,6 +621,9 @@ Layouts.list = {
             },
             chat = {
                 enabled = true,
+                -- The same flat black the unit frames are painted with, so the
+                -- corner of the screen reads as one surface rather than two.
+                bgColor = { r = 0, g = 0, b = 0 },
                 bgAlpha = 0.65,
                 fontSize = 12,
                 maxLines = 2000,
@@ -753,6 +765,8 @@ end
 -- revisions existed.
 --------------------------------------------------------------------------------
 
+local BLACK_CHAT = "Chat window painted the same flat black as the unit frames."
+
 local DOCKED_CHAT_SCALE = "System bars docked under the minimap, plain chat tabs " ..
     "with full channel names, and the UI scale pinned to 1440p so positions match on any screen."
 
@@ -762,9 +776,9 @@ Layouts.changelog = {
         [2] = "Plain chat tabs with full channel names, and the UI scale pinned to " ..
               "1440p so positions match on any screen.",
     },
-    compact   = { [1] = "First release.", [2] = DOCKED_CHAT_SCALE },
-    cinematic = { [1] = "First release.", [2] = DOCKED_CHAT_SCALE },
-    raid      = { [1] = "First release.", [2] = DOCKED_CHAT_SCALE },
+    compact   = { [1] = "First release.", [2] = DOCKED_CHAT_SCALE, [3] = BLACK_CHAT },
+    cinematic = { [1] = "First release.", [2] = DOCKED_CHAT_SCALE, [3] = BLACK_CHAT },
+    raid      = { [1] = "First release.", [2] = DOCKED_CHAT_SCALE, [3] = BLACK_CHAT },
 }
 
 for key, layout in pairs(Layouts.list) do

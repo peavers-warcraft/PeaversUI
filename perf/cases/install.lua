@@ -563,6 +563,8 @@ for _, entry in ipairs(Layouts:Sorted()) do
     assert(chat.shortChannelNames == false, entry.key .. " should leave channel names unabbreviated")
     assert(chat.shortChannelNamesWithdrawn == nil,
         entry.key .. " must not write PeaversChat's one-time migration flag")
+    assert(chat.bgColor and chat.bgColor.r == 0 and chat.bgColor.g == 0 and chat.bgColor.b == 0,
+        entry.key .. " chat should be painted the same flat black as the unit frames")
 end
 
 -- The transcription still holds: Standard derives to exactly what was on screen.
