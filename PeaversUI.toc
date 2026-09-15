@@ -16,7 +16,7 @@
 # out of Commons' widgets and hands off to Config's window when it finishes, so
 # without them there is nothing to show.
 #
-# The seven display modules are OptionalDeps rather than Dependencies on purpose.
+# The eight display modules are OptionalDeps rather than Dependencies on purpose.
 # A hard dependency would mean the pack refuses to load the moment somebody
 # disables one of them - and the installer's whole second step is a list of
 # modules you are allowed to turn off. OptionalDeps still guarantees load order,
@@ -24,7 +24,7 @@
 # anything missing is reported on the welcome screen with a link rather than
 # taking the pack down with it.
 ## Dependencies: PeaversCommons, PeaversConfig
-## OptionalDeps: PeaversUnitFrames, PeaversMiniMap, PeaversChat, PeaversToolTip, PeaversSystemBars, PeaversScaler, PeaversPerformance
+## OptionalDeps: PeaversUnitFrames, PeaversCastBar, PeaversMiniMap, PeaversChat, PeaversToolTip, PeaversSystemBars, PeaversScaler, PeaversPerformance
 
 ## SavedVariables: PeaversUIDB
 

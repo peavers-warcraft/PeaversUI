@@ -278,6 +278,39 @@ Layouts.list = {
                 showIcon = false,
                 hideInCombat = "never",
             },
+            castbar = {
+                -- Transcribed with the rest of Standard. The player's bar takes
+                -- the Cooldown Manager's width and parks under it, which is why
+                -- it carries no icon of its own - the row above it is already a
+                -- line of icons. On a client with no Cooldown Manager both fall
+                -- back to the position below, which is where it sits anyway.
+                units = {
+                    player = {
+                        enabled = true,
+                        width = 220, height = 24,
+                        matchCooldownManager = true,
+                        anchorToCooldownManager = true,
+                        cooldownManagerFrame = "UtilityCooldownViewer",
+                        anchorGap = 0,
+                        showIcon = false,
+                        showSpellName = true, showCastTime = true,
+                        framePoint = "CENTER", frameRelativePoint = "CENTER",
+                        frameX = -491, frameY = -81,
+                        hideBlizzard = true,
+                    },
+                    -- Off, but positioned, so switching one on from Edit Mode
+                    -- puts it where it belongs rather than in the middle.
+                    target = {
+                        enabled = false, width = 193, height = 22,
+                        frameX = -485, frameY = 15, hideBlizzard = true,
+                    },
+                    focus = {
+                        enabled = false, width = 180, height = 20,
+                        frameX = -482, frameY = 43, hideBlizzard = true,
+                    },
+                    pet = { enabled = false },
+                },
+            },
             systembars = {
                 -- No position here, in this layout or any other: the bars are
                 -- docked under the minimap by the loop at the bottom of this
@@ -404,6 +437,23 @@ Layouts.list = {
                 healthBar = true,
                 healthBarHeight = 5,
             },
+            castbar = {
+                units = {
+                    player = {
+                        enabled = true, width = 200, height = 20,
+                        showIcon = true, showSpellName = true, showCastTime = true,
+                        framePoint = "CENTER", frameX = 0, frameY = -150,
+                        hideBlizzard = true,
+                    },
+                    target = {
+                        enabled = true, width = 180, height = 18,
+                        framePoint = "CENTER", frameX = 0, frameY = 120,
+                        hideBlizzard = true,
+                    },
+                    focus = { enabled = false, width = 160, height = 16 },
+                    pet = { enabled = false },
+                },
+            },
             systembars = {
                 barHeight = 14,
                 showTitleBar = false,
@@ -522,6 +572,25 @@ Layouts.list = {
                 anchorY = 230,
                 healthBar = true,
                 healthBarPosition = "bottom",
+            },
+            castbar = {
+                units = {
+                    -- Wider and lower than Compact: the quiet layout leaves the
+                    -- middle of the screen empty, so the bar can afford the room.
+                    player = {
+                        enabled = true, width = 240, height = 22,
+                        showIcon = true, showSpellName = true, showCastTime = true,
+                        framePoint = "CENTER", frameX = 0, frameY = -190,
+                        hideBlizzard = true,
+                    },
+                    target = {
+                        enabled = true, width = 200, height = 20,
+                        framePoint = "CENTER", frameX = 0, frameY = 160,
+                        hideBlizzard = true,
+                    },
+                    focus = { enabled = false, width = 160, height = 16 },
+                    pet = { enabled = false },
+                },
             },
             systembars = {
                 barHeight = 8,
@@ -653,6 +722,28 @@ Layouts.list = {
                 -- up parked over the encounter.
                 hideInCombat = "units",
             },
+            castbar = {
+                units = {
+                    player = {
+                        enabled = true, width = 260, height = 26,
+                        showIcon = true, showSpellName = true, showCastTime = true,
+                        framePoint = "CENTER", frameX = 0, frameY = -160,
+                        hideBlizzard = true,
+                    },
+                    target = {
+                        enabled = true, width = 220, height = 22,
+                        framePoint = "CENTER", frameX = 0, frameY = 180,
+                        hideBlizzard = true,
+                    },
+                    -- On for a raid night: an interrupt is aimed at the focus.
+                    focus = {
+                        enabled = true, width = 180, height = 18,
+                        framePoint = "CENTER", frameX = -520, frameY = 140,
+                        hideBlizzard = true,
+                    },
+                    pet = { enabled = false },
+                },
+            },
             systembars = {
                 barHeight = 16,
                 showTitleBar = false,
@@ -766,6 +857,7 @@ end
 --------------------------------------------------------------------------------
 
 local BLACK_CHAT = "Chat window painted the same flat black as the unit frames."
+local CAST_BARS = "Cast bars are part of the pack now: PeaversCastBar is installed and arranged with everything else."
 
 local DOCKED_CHAT_SCALE = "System bars docked under the minimap, plain chat tabs " ..
     "with full channel names, and the UI scale pinned to 1440p so positions match on any screen."
@@ -775,10 +867,12 @@ Layouts.changelog = {
         [1] = "First release.",
         [2] = "Plain chat tabs with full channel names, and the UI scale pinned to " ..
               "1440p so positions match on any screen.",
+        [3] = BLACK_CHAT,
+        [4] = CAST_BARS,
     },
-    compact   = { [1] = "First release.", [2] = DOCKED_CHAT_SCALE, [3] = BLACK_CHAT },
-    cinematic = { [1] = "First release.", [2] = DOCKED_CHAT_SCALE, [3] = BLACK_CHAT },
-    raid      = { [1] = "First release.", [2] = DOCKED_CHAT_SCALE, [3] = BLACK_CHAT },
+    compact   = { [1] = "First release.", [2] = DOCKED_CHAT_SCALE, [3] = BLACK_CHAT, [4] = CAST_BARS },
+    cinematic = { [1] = "First release.", [2] = DOCKED_CHAT_SCALE, [3] = BLACK_CHAT, [4] = CAST_BARS },
+    raid      = { [1] = "First release.", [2] = DOCKED_CHAT_SCALE, [3] = BLACK_CHAT, [4] = CAST_BARS },
 }
 
 for key, layout in pairs(Layouts.list) do

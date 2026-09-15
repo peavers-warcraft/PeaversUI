@@ -138,6 +138,44 @@ Modules.list = {
         end,
     },
     {
+        key = "castbar",
+        folder = "PeaversCastBar",
+        label = "Cast Bar",
+        role = "display",
+        blurb = "Cast bars for player, target, focus and pet, matched to the Cooldown Manager.",
+        slash = "/pcb",
+
+        IsEnabled = function(_, ref)
+            local unit = ref.Config and ref.Config.GetUnit and ref.Config:GetUnit("player")
+            return unit and unit.enabled == true or false
+        end,
+
+        -- The same shape as the unit frames, and for the same reason: there is
+        -- no master switch, so "off" means every bar off *and* Blizzard's own
+        -- cast bars handed back, or the player is left with no cast bar at all.
+        SetEnabled = function(_, ref, on)
+            local config = ref.Config
+            if not config or type(config.GetUnit) ~= "function" then return end
+
+            for _, unit in ipairs(ref.Units or {}) do
+                local unitConfig = config:GetUnit(unit.key)
+                if unitConfig then unitConfig.enabled = on end
+            end
+            Call(ref, "Config:Save")
+
+            -- Blizzard:Apply reads the config it is handed, so it is passed
+            -- explicitly: Call would otherwise hand it the owning table as the
+            -- first argument and it would find no units at all.
+            Call(ref, "Blizzard:Apply", config)
+            Call(ref, "Core:ApplyConfig")
+        end,
+
+        Refresh = function(_, ref)
+            Call(ref, "Core:ApplyConfig")
+            Call(ref, "Blizzard:Apply", ref.Config)
+        end,
+    },
+    {
         key = "minimap",
         folder = "PeaversMiniMap",
         label = "MiniMap",

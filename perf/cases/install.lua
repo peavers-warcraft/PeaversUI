@@ -377,6 +377,50 @@ end
 _G.PeaversScaler = PSC
 _G.PeaversCommons.ConfigRegistry:Register({ name = "PeaversScaler", addonRef = PSC })
 
+-- PeaversCastBar. Per-unit settings under `units`, like the unit frames, and a
+-- Blizzard:Apply that reads the config table it is handed rather than a global -
+-- so the pack has to pass it explicitly, and this refuses anything else.
+local function CastUnitDefaults(overrides)
+    local unit = {
+        enabled = false, width = 220, height = 24,
+        matchCooldownManager = false, anchorToCooldownManager = false,
+        cooldownManagerFrame = "EssentialCooldownViewer",
+        anchorSide = "BOTTOM", anchorGap = 6,
+        showIcon = true, iconSide = "LEFT", showSpellName = true, showCastTime = true,
+        framePoint = "CENTER", frameRelativePoint = "CENTER",
+        frameX = 0, frameY = -180,
+        hideBlizzard = true,
+    }
+    for key, value in pairs(overrides or {}) do unit[key] = value end
+    return unit
+end
+
+local PCB = {
+    Config = FakeConfig({
+        fontSize = 11, barBgAlpha = 0.6, borderAlpha = 1, frameStrata = "MEDIUM",
+        showSpark = true, showLatency = true,
+        units = {
+            player = CastUnitDefaults({ enabled = true }),
+            target = CastUnitDefaults({ enabled = true, frameY = 200, width = 200, height = 22 }),
+            focus  = CastUnitDefaults({ frameX = -320, frameY = 120, width = 180, height = 20 }),
+            pet    = CastUnitDefaults({ frameY = -240, width = 160, height = 16, showCastTime = false }),
+        },
+    }),
+    Units = { { key = "player" }, { key = "target" }, { key = "focus" }, { key = "pet" } },
+    Core = {},
+    Blizzard = { applied = 0 },
+}
+function PCB.Config:GetUnit(key) return self.units[key] end
+function PCB.Core:ApplyConfig() Hop() end
+function PCB.Blizzard:Apply(config)
+    Hop()
+    assert(type(config) == "table" and type(config.GetUnit) == "function",
+        "Blizzard:Apply must be handed the config table, got " .. tostring(config))
+    self.applied = self.applied + 1
+end
+_G.PeaversCastBar = PCB
+_G.PeaversCommons.ConfigRegistry:Register({ name = "PeaversCastBar", addonRef = PCB })
+
 -- PeaversChat is deliberately absent: nothing is put in _G for it, and
 -- GetAddOnInfo above returns nil for it, so the case covers a module that is not
 -- installed at all rather than only the happy path.
@@ -432,6 +476,7 @@ local KNOWN = {
     tooltip = PTT.Config,
     systembars = PSB.Config,
     scaler = PSC.Config,
+    castbar = PCB.Config,
     -- PeaversChat is not loaded in this case, so its keys are listed rather
     -- than read off a live config. Transcribed from PeaversChat/src/Utils/Config.lua,
     -- and merged over COMMON_DEFAULTS below the same way a real config is.
@@ -598,7 +643,7 @@ local installHops = hops
 
 assert(#result.failures == 0, "install reported failures: " .. table.concat(result.failures, "; "))
 assert(#result.skipped == 1 and result.skipped[1] == "Chat", "Chat should be the only skipped module")
-assert(#result.applied == 5, "expected five modules configured, got " .. #result.applied)
+assert(#result.applied == 6, "expected six modules configured, got " .. #result.applied)
 
 -- The canvas went on with the layout. Enable is what records the player's own
 -- scale, so it has to have run - and before the reset could discard anything.
@@ -608,6 +653,14 @@ assert(PSC.Config.scaleMode == "1440p",
 assert(PSC.Config.original and PSC.Config.original.uiScale == "0.65",
     "the player's original scale must be recorded and survive the install's reset")
 assert(PSC.Scaler.applied >= 1, "the scale was never applied")
+
+-- The cast bars went on too, and Blizzard:Apply was handed the config table
+-- rather than the owning table - which the stand-in asserts on every call.
+assert(PCB.Config.units.player.enabled == true, "the player cast bar should be on after an install")
+assert(PCB.Config.units.player.anchorToCooldownManager == true,
+    "Standard anchors the player cast bar to the Cooldown Manager")
+assert(PCB.Config.units.pet.enabled == false, "Standard leaves the pet cast bar off")
+assert(PCB.Blizzard.applied >= 1, "the cast bars never handed Blizzard's own over")
 
 -- Layout values landed. These are the Standard layout, which is a transcription
 -- of a live install rather than a set of round numbers - so they are spot checks
@@ -1478,7 +1531,7 @@ local idle = Stubs.Drive(function() end, 144, 1 / 144)
 
 return {
     {
-        name = "installing the pack, five modules and a graphics preset",
+        name = "installing the pack, six modules and a graphics preset",
         callsPerFrame = 0,
         idleCallsPerSecond = 0,
         notes = installHops .. " calls into the module addons for the whole install, " ..

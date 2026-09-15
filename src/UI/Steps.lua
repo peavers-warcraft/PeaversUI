@@ -180,7 +180,7 @@ Steps.list = {}
 
 Steps.list.welcome = {
     title = "Set up your interface",
-    subtitle = "Nine addons, one pass. On the layout screen your interface " ..
+    subtitle = "Ten addons, one pass. On the layout screen your interface " ..
                "changes as you click, so you can see what you are choosing - and " ..
                "closing the installer without finishing puts it all back.",
 
