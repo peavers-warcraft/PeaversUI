@@ -805,22 +805,27 @@ end
 -- Copied rather than handed over: the wizard lets people change a context on the
 -- graphics screen, and doing that to the layout table itself would quietly
 -- rewrite the shipped layout for the rest of the session.
+--
+-- Only the contexts this client has. The layouts above name all four, but a
+-- plan carrying "mythicplus" on a client with no timed dungeons would be a
+-- setting nobody can see, change or use.
 function Layouts:AutoSwitchFor(key)
     local layout = self:Get(key)
     local plan = layout and layout.autoSwitch
 
-    if not plan then
-        return { enabled = false, raid = "none", mythicplus = "none",
-                 dungeon = "none", world = "none" }
+    local keys = { "raid", "mythicplus", "dungeon", "world" }
+    if PUI.Installer and PUI.Installer.AutoSwitchContexts then
+        keys = {}
+        for _, ctx in ipairs(PUI.Installer:AutoSwitchContexts()) do
+            keys[#keys + 1] = ctx.key
+        end
     end
 
-    return {
-        enabled = plan.enabled and true or false,
-        raid = plan.raid or "none",
-        mythicplus = plan.mythicplus or "none",
-        dungeon = plan.dungeon or "none",
-        world = plan.world or "none",
-    }
+    local out = { enabled = plan and plan.enabled and true or false }
+    for _, ctxKey in ipairs(keys) do
+        out[ctxKey] = plan and plan[ctxKey] or "none"
+    end
+    return out
 end
 
 return Layouts

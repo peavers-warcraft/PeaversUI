@@ -372,7 +372,8 @@ function ConfigUI:BuildExtrasPage(parentFrame)
 
     local askable = 0
     for key in pairs(PUI.Harvest.sources) do
-        if PUI.Extras.byKey[key] then askable = askable + 1 end
+        local entry = PUI.Extras.byKey[key]
+        if entry and PUI.Extras:ForClient(entry) then askable = askable + 1 end
     end
 
     y = y - 26 - GAP_TIGHT

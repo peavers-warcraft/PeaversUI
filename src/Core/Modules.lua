@@ -360,6 +360,44 @@ for _, module in ipairs(Modules.list) do
 end
 
 --------------------------------------------------------------------------------
+-- Which client
+--
+-- The pack runs on retail and on the Classic clients. Nearly everything that
+-- differs between them is the modules' business; the pack only needs to know
+-- which content exists - keys, Challenge Modes, neither - and which recommended
+-- addons make sense. PeaversCommons.Compat answers when it is there, the
+-- interface number otherwise, and anything unrecognised reads as retail so an
+-- unfamiliar client keeps today's behaviour rather than losing some of it.
+--------------------------------------------------------------------------------
+function Modules:DetectClient()
+    local compat = _G.PeaversCommons and _G.PeaversCommons.Compat
+    local interface = compat and compat.interface
+    if not interface and type(GetBuildInfo) == "function" then
+        interface = tonumber((select(4, GetBuildInfo())))
+    end
+    interface = interface or 0
+
+    local key = "retail"
+    if compat and compat.isClassicEra ~= nil then
+        key = (compat.isClassicEra and "era") or (compat.isAnniversary and "anniversary")
+            or (compat.isMists and "mists") or (compat.isClassic and "classic") or "retail"
+    elseif interface > 0 and interface < 20000 then
+        key = "era"
+    elseif interface >= 20000 and interface < 30000 then
+        key = "anniversary"
+    elseif interface >= 50000 and interface < 60000 then
+        key = "mists"
+    elseif interface > 0 and interface < 100000 then
+        key = "classic"
+    end
+
+    self.client = { key = key, interface = interface, isRetail = key == "retail" }
+    return self.client
+end
+
+Modules:DetectClient()
+
+--------------------------------------------------------------------------------
 -- Presence
 --------------------------------------------------------------------------------
 

@@ -484,7 +484,7 @@ Steps.list.graphics = {
                 "to offer and nothing to switch between. The rest of the pack installs " ..
                 "normally, and your graphics settings are left exactly as they are.\n\n" ..
                 "It is the module that makes this pack worth more than a set of frame " ..
-                "positions: it applies a preset when you zone into a raid or a key and " ..
+                "positions: it applies a preset when you zone into " .. Installer:InstancePhrase() .. " and " ..
                 "puts it back when you leave, which is a thing you would otherwise do " ..
                 "by hand or not at all.", {
                 color = C.textMuted,
@@ -589,7 +589,7 @@ Steps.list.graphics = {
         rightY = rightY - 2
 
         local intro, introHeight = Paragraph(page,
-            "Apply a different preset when you zone into a raid, a key or a dungeon, " ..
+            "Apply a different preset when you zone into " .. Installer:InstancePhrase() .. ", " ..
             "and put it back in the open world. Every switch is announced in chat.", rightWidth)
         intro:SetPoint("TOPLEFT", rightX, rightY)
         rightY = rightY - (introHeight + 8)

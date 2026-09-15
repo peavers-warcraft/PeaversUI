@@ -463,37 +463,62 @@ end
 --------------------------------------------------------------------------------
 
 -- `short` is the label used in the one-line install summary, where "Raid
--- Quality, M+ Performance" has to fit next to three other rows.
-local FALLBACK_CONTEXTS = {
-    { key = "raid",       name = "Raid",       short = "Raid",    configKey = "autoSwitchRaid" },
-    { key = "mythicplus", name = "Mythic+",    short = "M+",      configKey = "autoSwitchMythicPlus" },
-    { key = "dungeon",    name = "Dungeon",    short = "Dungeon", configKey = "autoSwitchDungeon" },
-    { key = "world",      name = "Open world", short = "World",   configKey = "autoSwitchWorld" },
+-- Quality, M+ Performance" has to fit next to three other rows. Keyed by name
+-- rather than key: the timed-dungeon context keeps the key "mythicplus" on every
+-- client that has one, and is called something different on each.
+local SHORT_BY_NAME = {
+    ["Raid"] = "Raid", ["Mythic+"] = "M+", ["Challenge Mode"] = "CM",
+    ["Dungeon"] = "Dungeon", ["Open world"] = "World",
 }
 
-local SHORT_BY_KEY = {}
-for _, ctx in ipairs(FALLBACK_CONTEXTS) do SHORT_BY_KEY[ctx.key] = ctx.short end
+-- The contexts PeaversPerformance would offer on this client, for drawing the
+-- graphics screen when it is not installed. Same rule it follows: a timed
+-- dungeon context only where timed dungeons exist, named for what they are
+-- called there.
+local function FallbackContexts()
+    local client = Modules.client and Modules.client.key or "retail"
+    local list = { { key = "raid", name = "Raid", configKey = "autoSwitchRaid" } }
+    if client == "retail" then
+        list[#list + 1] = { key = "mythicplus", name = "Mythic+", configKey = "autoSwitchMythicPlus" }
+    elseif client == "mists" then
+        list[#list + 1] = { key = "mythicplus", name = "Challenge Mode", configKey = "autoSwitchMythicPlus" }
+    end
+    list[#list + 1] = { key = "dungeon", name = "Dungeon", configKey = "autoSwitchDungeon" }
+    list[#list + 1] = { key = "world", name = "Open world", configKey = "autoSwitchWorld" }
+    return list
+end
 
 function Installer:AutoSwitchContexts()
     local ref = Modules:Ref(Modules.byKey.performance)
-    local contexts = ref and ref.AutoSwitch and ref.AutoSwitch.contexts
+    local contexts = ref and ref.AutoSwitch and ref.AutoSwitch.contexts or FallbackContexts()
 
-    if not contexts then
-        return FALLBACK_CONTEXTS
-    end
-
-    -- PeaversPerformance owns key, name and configKey; `short` is ours, so it
-    -- is grafted on rather than expected to be there.
+    -- PeaversPerformance owns key, name, configKey and - since it learned which
+    -- client it is on - short. Ours is only a fallback for an older version.
     local out = {}
-    for index, ctx in ipairs(contexts) do
-        out[index] = {
-            key = ctx.key,
-            name = ctx.name,
-            configKey = ctx.configKey,
-            short = SHORT_BY_KEY[ctx.key] or ctx.name,
-        }
+    for _, ctx in ipairs(contexts) do
+        if ctx.key and ctx.configKey then
+            out[#out + 1] = {
+                key = ctx.key,
+                name = ctx.name,
+                configKey = ctx.configKey,
+                short = ctx.short or SHORT_BY_NAME[ctx.name] or ctx.name,
+            }
+        end
     end
     return out
+end
+
+-- What auto-switch reacts to on this client, as a phrase for the wizard's
+-- sentences: "a raid, a key or a dungeon" on retail, and nothing about keys on a
+-- client that has none.
+function Installer:InstancePhrase()
+    local timed
+    for _, ctx in ipairs(self:AutoSwitchContexts()) do
+        if ctx.key == "mythicplus" then timed = ctx.name end
+    end
+    if timed == "Mythic+" then return "a raid, a key or a dungeon" end
+    if timed then return "a raid, a " .. timed .. " or a dungeon" end
+    return "a raid or a dungeon"
 end
 
 -- Display name for a preset key, or for the two pseudo-targets the auto-switch

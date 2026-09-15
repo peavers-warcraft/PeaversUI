@@ -45,6 +45,13 @@
 -- A url is only given where the project's address is known for certain. An
 -- invented CurseForge slug 404s, which is worse than no link at all - so
 -- several entries below deliberately have none, and name the addon instead.
+--
+-- CLIENTS
+--
+-- `clients` names the game clients an entry is offered on, by the keys in
+-- Modules.client ("retail", "era", "anniversary", "mists"); absent means all of
+-- them. Recommending an addon that does not exist for the client somebody is
+-- playing sends them looking for something that is not there.
 --------------------------------------------------------------------------------
 
 local _, PUI = ...
@@ -53,6 +60,11 @@ local Extras = {}
 PUI.Extras = Extras
 
 local CURSE = "https://www.curseforge.com/wow/addons/"
+
+Extras.clientKeys = { retail = true, era = true, anniversary = true, mists = true, classic = true }
+
+-- Built around retail-only systems: the Cooldown Manager and Mythic+.
+local RETAIL_ONLY = { retail = true }
 
 Extras.categories = { "frames", "combat", "dungeon", "quality" }
 
@@ -105,6 +117,7 @@ Extras.list = {
         name = "CooldownManagerCentered",
         folders = { "CooldownManagerCentered" },
         category = "frames",
+        clients = RETAIL_ONLY,
         blurb = "Moves the built-in Cooldown Manager where you want it.",
         why = "The client's own Cooldown Manager is good and is stuck where " ..
               "Blizzard put it. PeaversCastBar matches its width, so the two " ..
@@ -170,6 +183,7 @@ Extras.list = {
         name = "WarpDeplete",
         folders = { "WarpDeplete" },
         category = "dungeon",
+        clients = RETAIL_ONLY,
         blurb = "Mythic+ timer and forces.",
         why = "Replaces the default keystone timer with something you can read " ..
               "at a glance. Pairs with PeaversSplits, which answers a different " ..
@@ -185,6 +199,7 @@ Extras.list = {
         name = "RaiderIO",
         folders = { "RaiderIO" },
         category = "dungeon",
+        clients = RETAIL_ONLY,
         blurb = "Mythic+ scores in tooltips and the group finder.",
         why = "Mostly useful for the group finder. Worth turning most of the " ..
               "rest of it off.",
@@ -262,6 +277,13 @@ function Extras:Status(entry)
     return "missing"
 end
 
+-- True when an entry is offered on the client being played.
+function Extras:ForClient(entry)
+    if not entry.clients then return true end
+    local client = PUI.Modules and PUI.Modules.client and PUI.Modules.client.key or "retail"
+    return entry.clients[client] == true
+end
+
 --- The string behind an entry's Copy button, and where it came from.
 ---
 --- Two sources. `shipped` is what is written into this file and reaches
@@ -288,11 +310,13 @@ function Extras:HasProfile(entry)
     return (self:ProfileText(entry)) ~= nil
 end
 
--- Entries of one category, in the order they are written above.
+-- Entries of one category offered on this client, in the order written above.
 function Extras:OfCategory(category)
     local out = {}
     for _, entry in ipairs(self.list) do
-        if entry.category == category then out[#out + 1] = entry end
+        if entry.category == category and self:ForClient(entry) then
+            out[#out + 1] = entry
+        end
     end
     return out
 end
@@ -302,8 +326,10 @@ end
 function Extras:CountInstalled()
     local installed, total = 0, 0
     for _, entry in ipairs(self.list) do
-        total = total + 1
-        if self:Status(entry) == "loaded" then installed = installed + 1 end
+        if self:ForClient(entry) then
+            total = total + 1
+            if self:Status(entry) == "loaded" then installed = installed + 1 end
+        end
     end
     return installed, total
 end

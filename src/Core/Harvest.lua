@@ -132,7 +132,9 @@ function Harvest:CaptureAll()
     -- Walked in Extras order rather than pairs order, so the report reads the
     -- same way twice running.
     for _, entry in ipairs(PUI.Extras.list) do
-        if self.sources[entry.key] then
+        -- Only what the page offers on this client: a capture for an addon the
+        -- page hides would be a stored string nothing can show.
+        if self.sources[entry.key] and PUI.Extras:ForClient(entry) then
             local text, reason = self:Capture(entry.key)
             if text then
                 PUI.Config.shared[entry.key] = text

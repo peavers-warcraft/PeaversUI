@@ -1264,12 +1264,121 @@ end
 
 -- Every entry has to be reachable from the page, which walks categories rather
 -- than the flat list. An entry in a category the page never renders is invisible.
-local reachable = 0
+local reachable, offered = 0, 0
 for _, category in ipairs(Extras.categories) do
     reachable = reachable + #Extras:OfCategory(category)
 end
-assert(reachable == extrasChecked,
-    "some extras entries are not reachable through the categories the page walks")
+for _, entry in ipairs(Extras.list) do
+    if Extras:ForClient(entry) then offered = offered + 1 end
+    for clientKey in pairs(entry.clients or {}) do
+        assert(Extras.clientKeys[clientKey],
+            "extras entry '" .. entry.key .. "' names an unknown client '" .. tostring(clientKey) .. "'")
+    end
+end
+assert(reachable == offered,
+    "some extras entries offered on this client are not reachable through the categories the page walks")
+
+--------------------------------------------------------------------------------
+-- The pack on the Classic clients
+--
+-- Only what the pack itself decides per client: whether a timed-dungeon context
+-- exists and what it is called, which plan a layout builds, and which
+-- recommendations are offered. The modules' own Classic behaviour is theirs to
+-- test. PeaversPerformance's context list is swapped per client the way the real
+-- addon builds it, and the client is detected from a stubbed build number.
+--------------------------------------------------------------------------------
+
+local realGetBuildInfo = _G.GetBuildInfo
+local realContexts = PPERF.AutoSwitch.contexts
+
+local function AsClient(interface, contexts)
+    _G.GetBuildInfo = function() return "0.0.0", "1", "", interface end
+    Modules:DetectClient()
+    PPERF.AutoSwitch.contexts = contexts
+end
+
+local function SummaryLine(choices)
+    for _, line in ipairs(Installer:Preview(choices)) do
+        if line.label == "Auto-switch" then return line.detail end
+    end
+end
+
+-- Classic Era: no timed dungeons, no retail-only recommendations.
+AsClient(11509, {
+    { key = "raid",    name = "Raid",       configKey = "autoSwitchRaid" },
+    { key = "dungeon", name = "Dungeon",    configKey = "autoSwitchDungeon" },
+    { key = "world",   name = "Open world", configKey = "autoSwitchWorld" },
+})
+assert(Modules.client.key == "era", "11509 should read as Classic Era, got " .. tostring(Modules.client.key))
+
+local eraPlan = Layouts:AutoSwitchFor("standard")
+assert(eraPlan.mythicplus == nil, "an Era plan must not carry a Mythic+ context")
+assert(eraPlan.raid == "quality" and eraPlan.enabled == true, "the Era plan should still come from the layout")
+assert(not Installer:InstancePhrase():find("key", 1, true), "Era wording must not mention keys")
+for _, key in ipairs({ "warpdeplete", "raiderio", "cooldownmanagercentered" }) do
+    assert(not Extras:ForClient(Extras.byKey[key]), key .. " should not be offered on Classic Era")
+end
+assert(Extras:ForClient(Extras.byKey.details), "an unrestricted entry is offered on every client")
+
+PPERF.Config.autoSwitchMythicPlus = "untouched"
+local eraChoices = Installer:NewChoices("standard")
+eraChoices.graphicsPreset = "balanced"
+local eraSummary = SummaryLine(eraChoices)
+assert(eraSummary and not eraSummary:find("M+", 1, true), "the Era summary must not mention M+: " .. tostring(eraSummary))
+Installer:Apply(eraChoices)
+assert(PPERF.Config.autoSwitchMythicPlus == "untouched", "an Era install must not write a Mythic+ context")
+
+-- Mists Classic: the timed context is Challenge Mode, named by its own label.
+AsClient(50504, {
+    { key = "raid",       name = "Raid",           configKey = "autoSwitchRaid" },
+    { key = "mythicplus", name = "Challenge Mode", short = "CM", configKey = "autoSwitchMythicPlus" },
+    { key = "dungeon",    name = "Dungeon",        configKey = "autoSwitchDungeon" },
+    { key = "world",      name = "Open world",     configKey = "autoSwitchWorld" },
+})
+assert(Modules.client.key == "mists", "50504 should read as Mists Classic")
+assert(Installer:InstancePhrase():find("Challenge Mode", 1, true), "Mists wording should name Challenge Mode")
+local mistsChoices = Installer:NewChoices("standard")
+mistsChoices.graphicsPreset = "balanced"
+local mistsSummary = SummaryLine(mistsChoices)
+assert(mistsSummary and mistsSummary:find("CM", 1, true) and not mistsSummary:find("M+", 1, true),
+    "the Mists summary should use Challenge Mode's own short label: " .. tostring(mistsSummary))
+
+-- Without PeaversPerformance the fallback list follows the same rule.
+local registry = _G.PeaversCommons.ConfigRegistry
+local realGetAddon = registry.GetAddon
+local realPerformance = _G.PeaversPerformance
+registry.GetAddon = function(self, name)
+    if name == "PeaversPerformance" then return nil end
+    return realGetAddon(self, name)
+end
+_G.PeaversPerformance = nil
+
+local mistsFallback = {}
+for _, ctx in ipairs(Installer:AutoSwitchContexts()) do mistsFallback[ctx.key] = ctx end
+assert(mistsFallback.mythicplus and mistsFallback.mythicplus.name == "Challenge Mode",
+    "the Mists fallback should offer Challenge Mode")
+AsClient(20506, realContexts)
+assert(Modules.client.key == "anniversary", "20506 should read as Anniversary")
+for _, ctx in ipairs(Installer:AutoSwitchContexts()) do
+    assert(ctx.key ~= "mythicplus", "the Anniversary fallback must not offer a timed-dungeon context")
+end
+
+registry.GetAddon = realGetAddon
+_G.PeaversPerformance = realPerformance
+
+-- PeaversCommons.Compat, where present, wins over the build number.
+_G.PeaversCommons.Compat = { interface = 50504, isClassic = true,
+    isClassicEra = false, isAnniversary = false, isMists = true }
+_G.GetBuildInfo = function() return "0.0.0", "1", "", 11509 end
+Modules:DetectClient()
+assert(Modules.client.key == "mists", "Compat should decide the client when it is there")
+_G.PeaversCommons.Compat = nil
+
+-- Back to retail for everything below.
+_G.GetBuildInfo = realGetBuildInfo
+PPERF.AutoSwitch.contexts = realContexts
+Modules:DetectClient()
+assert(Modules.client.key == "retail", "the fixture should read as retail again")
 
 --------------------------------------------------------------------------------
 -- Capturing profiles from third-party addons

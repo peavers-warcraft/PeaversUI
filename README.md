@@ -89,11 +89,17 @@ So the installer asks for two things instead of one. A **baseline**, applied now
 | Dungeon | back to your own settings | Performance | no change |
 | Open world | back to your own settings | back to your own settings | no change |
 
+On Mists of Pandaria Classic the Mythic+ row is **Challenge Mode**. Classic Era and Anniversary have no timed dungeons, so the row is not offered there at all.
+
 Every context can also be set to **No change**, which leaves it alone entirely, or **My original settings**, which puts back the console variables you had before any preset was applied.
 
 The switching itself is PeaversPerformance''s, not this pack''s — it snapshots every CVar before it writes one, defers to after combat when it has to, and announces every switch in chat so nothing happens silently. What the pack adds is the part people never get round to: a plan that is already filled in, on a screen you were going to look at anyway.
 
 Two rules keep it honest. Choosing **Leave my graphics settings alone** as the baseline switches auto-switching off too — alone means alone. And `/pui apply <layout>`, which never asks the graphics question, never touches any of it: changing your mind about frame positions will not quietly undo a plan you set up weeks ago.
+
+## Game versions
+
+One download for retail and the Classic clients: Classic Era, Anniversary and Mists of Pandaria Classic. The installer, the layouts and the layout versioning are the same everywhere. What differs is only what the client has - no key-based graphics context where there are no keys, and no recommendations for addons that only exist on retail.
 
 ## More stuff
 
@@ -166,7 +172,8 @@ The layout data is checked too: every key any layout writes has to be a setting 
 - Four layouts — Standard, Compact, Cinematic and Raid — covering the usual reasons people rearrange a UI
 - Per-module on/off, with anything you switch off handed straight back to Blizzard
 - Graphics presets applied through PeaversPerformance, which snapshots every CVar before it touches one
-- A graphics preset per context — raid, Mythic+, dungeon, open world — pre-filled by the layout you picked, so the settings follow what you are actually doing
+- A graphics preset per context — raid, Mythic+ (Challenge Mode on Mists Classic), dungeon, open world — pre-filled by the layout you picked, so the settings follow what you are actually doing
+- Runs on retail, Classic Era, Anniversary and Mists of Pandaria Classic from one download
 - Standard is a real interface, transcribed from a live install, not four plausible-looking numbers
 - Honest about what is missing: modules that are absent, or installed but not enabled, are named rather than silently skipped
 - Switch layouts later with one command, without touching your module choices or your graphics settings
