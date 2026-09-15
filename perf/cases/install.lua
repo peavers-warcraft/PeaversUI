@@ -515,6 +515,20 @@ for _, entry in ipairs(Layouts:Sorted()) do
     assert(bars.lockPosition == true, entry.key .. " system bars should be locked in place")
 end
 
+-- The chat style is the author's and is the same in every layout: plain
+-- mixed-case tabs with no underline, and channel names left as Blizzard prints
+-- them. A layout that stays quiet about these gets PeaversChat's own defaults
+-- after the reset - capitals and an accent rule - which is the old look.
+for _, entry in ipairs(Layouts:Sorted()) do
+    local chat = entry.layout.overrides.chat
+    assert(chat, entry.key .. " must configure chat")
+    assert(chat.tabUppercase == false, entry.key .. " chat tabs should not be uppercase")
+    assert(chat.tabUnderline == false, entry.key .. " chat tabs should not be underlined")
+    assert(chat.shortChannelNames == false, entry.key .. " should leave channel names unabbreviated")
+    assert(chat.shortChannelNamesWithdrawn == nil,
+        entry.key .. " must not write PeaversChat's one-time migration flag")
+end
+
 -- The transcription still holds: Standard derives to exactly what was on screen.
 local standardBars = Layouts:Get("standard").overrides.systembars
 assert(standardBars.framePoint == "TOPRIGHT" and standardBars.frameX == 0

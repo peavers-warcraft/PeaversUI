@@ -205,11 +205,14 @@ Layouts.list = {
                 maxLines = 1000,
                 styleTabs = true,
                 tabsInside = true,
-                tabUppercase = true,
-                tabUnderline = true,
+                -- Plain tab labels: mixed case and no accent underline. The
+                -- selected tab is told apart by its white text alone, which is
+                -- quieter than a coloured rule under a word in capitals.
+                tabUppercase = false,
+                tabUnderline = false,
                 tabFontSize = 10,
-                -- Arial Narrow ships with the game. Small uppercase tabs need a
-                -- condensed face or they run into each other.
+                -- Arial Narrow ships with the game. Small tabs need a condensed
+                -- face or they run into each other.
                 tabFont = "Fonts\\ARIALN.TTF",
                 paddingLeft = 7,
                 paddingRight = 5,
@@ -229,7 +232,10 @@ Layouts.list = {
                 copyButtonVisibility = "dim",
                 copyIconSize = 11,
                 copyStripColors = true,
-                shortChannelNames = true,
+                -- Off: channel names as Blizzard prints them. Abbreviating them
+                -- rewrites a hyperlink's display text, and that is what broke
+                -- chat in Mythic+ - see PeaversChat's Main.lua.
+                shortChannelNames = false,
                 timestamps = "default",
                 -- Flush into the bottom-left corner. edgeToEdge above is what
                 -- makes x = 0 reachable; this is what actually puts it there.
@@ -367,6 +373,10 @@ Layouts.list = {
                 bgAlpha = 0.55,
                 fontSize = 11,
                 tabFontSize = 11,
+                -- The house chat style, shared by every layout: see Standard.
+                tabUppercase = false,
+                tabUnderline = false,
+                shortChannelNames = false,
                 paddingLeft = 6,
                 paddingRight = 4,
                 paddingTop = 4,
@@ -482,7 +492,10 @@ Layouts.list = {
                 fading = true,
                 timeVisible = 60,
                 showBottomButton = false,
-                tabUnderline = true,
+                -- The house chat style, shared by every layout: see Standard.
+                tabUppercase = false,
+                tabUnderline = false,
+                shortChannelNames = false,
                 positionEnabled = true,
                 chatPoint = "BOTTOMLEFT",
                 chatX = 0,
@@ -602,7 +615,10 @@ Layouts.list = {
                 fontSize = 12,
                 maxLines = 2000,
                 fading = false,
-                shortChannelNames = true,
+                -- The house chat style, shared by every layout: see Standard.
+                tabUppercase = false,
+                tabUnderline = false,
+                shortChannelNames = false,
                 positionEnabled = true,
                 chatPoint = "BOTTOMLEFT",
                 chatX = 0,
