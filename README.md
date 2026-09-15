@@ -3,7 +3,7 @@
 [![Ultra Performance](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/peavers-warcraft/PeaversUI/master/.github/badges/perf.json)](https://github.com/peavers-warcraft/PeaversUI/actions/workflows/perf.yml)
 [![AddonSentry](https://addonsentry.io/api/public/repos/peavers-warcraft/PeaversUI/badge.svg)](https://addonsentry.io/dashboard/peavers-warcraft/PeaversUI)
 
-The Peavers UI pack: eight addons that replace most of the World of Warcraft interface, and an installer that sets all of them up in one pass.
+The Peavers UI pack: nine addons that replace most of the World of Warcraft interface, and an installer that sets all of them up in one pass.
 
 Part of the **Peavers Ultra Performance** family: addons that hold themselves to a published budget, measured on every push.
 
@@ -16,13 +16,14 @@ Part of the **Peavers Ultra Performance** family: addons that hold themselves to
 | [PeaversChat](https://github.com/peavers-warcraft/PeaversChat) | The chat window — flat, text tabs, clickable links, a copy button |
 | [PeaversToolTip](https://github.com/peavers-warcraft/PeaversToolTip) | Tooltips — a flat box whose border carries item quality or unit reaction |
 | [PeaversSystemBars](https://github.com/peavers-warcraft/PeaversSystemBars) | FPS and latency, as bars rather than a number in a menu |
+| [PeaversScaler](https://github.com/peavers-warcraft/PeaversScaler) | The UI scale the layouts are drawn at, so they land in the same place on any screen |
 | [PeaversPerformance](https://github.com/peavers-warcraft/PeaversPerformance) | Graphics settings — five presets, every CVar snapshotted before it is touched |
 | [PeaversCommons](https://github.com/peavers-warcraft/PeaversCommons) | The shared library the rest are built on |
 | [PeaversConfig](https://github.com/peavers-warcraft/PeaversConfig) | One settings window for the whole collection |
 
-PeaversCommons and PeaversConfig are required. The other six are optional dependencies, and the installer configures whichever of them it finds — so a pack with three modules installed works, and says so on its first screen rather than refusing to load.
+PeaversCommons and PeaversConfig are required. The other seven are optional dependencies, and the installer configures whichever of them it finds — so a pack with three modules installed works, and says so on its first screen rather than refusing to load.
 
-That is deliberate. A hard dependency on all eight would mean the pack stops loading the moment somebody disables one of them, and the installer's second screen is a list of modules you are allowed to turn off.
+That is deliberate. A hard dependency on all nine would mean the pack stops loading the moment somebody disables one of them, and the installer's second screen is a list of modules you are allowed to turn off.
 
 ## The installer
 
@@ -197,14 +198,14 @@ After that, the pack lives in the Peavers settings window under **UI Pack**, alo
 
 ### Recommended: PeaversUpdater
 
-Download and install [PeaversUpdater](https://github.com/peavers-warcraft/PeaversUpdater/releases/latest), the desktop updater for the whole Peavers collection. It installs PeaversUI together with every module in the pack, and delivers updates before they reach CurseForge — which for a pack of eight addons is the difference between updating once and waiting on eight separate approvals.
+Download and install [PeaversUpdater](https://github.com/peavers-warcraft/PeaversUpdater/releases/latest), the desktop updater for the whole Peavers collection. It installs PeaversUI together with every module in the pack, and delivers updates before they reach CurseForge — which for a pack of nine addons is the difference between updating once and waiting on nine separate approvals.
 
 ### Alternative: CurseForge
 
 1. Download [PeaversUI](https://www.curseforge.com/wow/addons/peaversui) — every module in the pack comes with it
 2. Enable them on the character selection screen, and log in — the installer opens by itself
 
-The pack lists all eight addons as dependencies, so one download brings the
+The pack lists all nine addons as dependencies, so one download brings the
 whole suite. Any module you would rather not run can be switched off on the
 installer's second step, or disabled at the character screen — the pack copes
 with a module being absent and says so on its welcome screen.

@@ -11,8 +11,9 @@
 -- quiet about keeps the value the module shipped with.
 --
 -- Coordinates: PeaversUnitFrames positions every frame as an offset from the
--- centre of UIParent, so the numbers below are resolution independent and mean
--- the same thing on 1080p and on an ultrawide. PeaversMiniMap and
+-- centre of UIParent, in UI units. UI units are only the same size on every
+-- screen when the UI scale is, which is why each layout also pins the scale -
+-- see "The canvas every layout is drawn on" at the bottom. PeaversMiniMap and
 -- PeaversSystemBars anchor to a screen corner or edge instead, because a
 -- minimap belongs in a corner at every resolution rather than at a fixed
 -- distance from the middle.
@@ -702,10 +703,39 @@ function Layouts.DockSystemBars(minimap, bars)
     bars.lockPosition = true
 end
 
+--------------------------------------------------------------------------------
+-- The canvas every layout is drawn on
+--
+-- Every coordinate in this file is in UI units, and how many UI units a screen
+-- has depends on its UI scale: 768 tall at a scale of 1.0, 1440 tall at 0.5333.
+-- The numbers above were set by eye on a 4K screen running PeaversScaler's 1440p
+-- mode, so they describe a canvas 1440 units tall. On a machine left at 1.0 the
+-- same numbers put the unit frames at y = -395 on a screen whose bottom edge is
+-- at -384, which is how the pack came out "all out of place" on a second PC.
+--
+-- So the canvas is part of the layout. Each one asks PeaversScaler for the same
+-- 1440p mode, which is a fixed scale rather than a resolution-dependent one, and
+-- then every position is the same fraction of the screen on any monitor: 1080p,
+-- 1440p, 4K or an ultrawide. The trade is honest and worth stating - on a 1080p
+-- screen the whole interface is drawn at three quarters of its native size - but
+-- a layout that is the right size in the wrong place is not a layout at all.
+--
+-- A layout may name its own scaler block to use a different canvas; one that
+-- does has to be positioned for it.
+--------------------------------------------------------------------------------
+
+Layouts.CANVAS = "1440p"
+
 for _, layout in pairs(Layouts.list) do
     local overrides = layout.overrides
     if overrides and overrides.minimap and overrides.systembars then
         Layouts.DockSystemBars(overrides.minimap, overrides.systembars)
+    end
+    if overrides then
+        overrides.scaler = overrides.scaler or {}
+        if overrides.scaler.scaleMode == nil then
+            overrides.scaler.scaleMode = Layouts.CANVAS
+        end
     end
 end
 

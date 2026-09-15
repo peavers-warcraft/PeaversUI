@@ -343,6 +343,40 @@ PPERF.AutoSwitch = {
     end,
 }
 
+-- PeaversScaler, with the one piece of state that matters most: the `original`
+-- snapshot its Enable records before the first write, and Disable restores.
+-- The fixture's Reset mirrors the real flat ConfigManager and drops that key, so
+-- a pack that resets the scaler without carrying it across fails below.
+local PSC = {
+    Config = FakeConfig({
+        enabled = false, scaleMode = "pixelPerfect", scale = 1.0, ppMultiplier = 0,
+        debugMode = false,
+    }),
+    Scaler = { applied = 0, restored = 0 },
+}
+function PSC.Scaler:Enable()
+    Hop()
+    if not PSC.Config.original then
+        PSC.Config.original = { useUiScale = "1", uiScale = "0.65" }
+    end
+    PSC.Config.enabled = true
+    self.applied = self.applied + 1
+end
+function PSC.Scaler:Disable()
+    Hop()
+    -- The real Disable has no original to hand back when it was never enabled,
+    -- and approximates a scale instead. The pack must never ask for that.
+    assert(PSC.Config.original, "Scaler:Disable called with nothing to restore")
+    PSC.Config.enabled = false
+    self.restored = self.restored + 1
+end
+function PSC.Scaler:Apply()
+    Hop()
+    if PSC.Config.enabled then self.applied = self.applied + 1 end
+end
+_G.PeaversScaler = PSC
+_G.PeaversCommons.ConfigRegistry:Register({ name = "PeaversScaler", addonRef = PSC })
+
 -- PeaversChat is deliberately absent: nothing is put in _G for it, and
 -- GetAddOnInfo above returns nil for it, so the case covers a module that is not
 -- installed at all rather than only the happy path.
@@ -396,6 +430,7 @@ local KNOWN = {
     minimap = PMM.Config,
     tooltip = PTT.Config,
     systembars = PSB.Config,
+    scaler = PSC.Config,
     -- PeaversChat is not loaded in this case, so its keys are listed rather
     -- than read off a live config. Transcribed from PeaversChat/src/Utils/Config.lua,
     -- and merged over COMMON_DEFAULTS below the same way a real config is.
@@ -560,7 +595,16 @@ local installHops = hops
 
 assert(#result.failures == 0, "install reported failures: " .. table.concat(result.failures, "; "))
 assert(#result.skipped == 1 and result.skipped[1] == "Chat", "Chat should be the only skipped module")
-assert(#result.applied == 4, "expected four modules configured, got " .. #result.applied)
+assert(#result.applied == 5, "expected five modules configured, got " .. #result.applied)
+
+-- The canvas went on with the layout. Enable is what records the player's own
+-- scale, so it has to have run - and before the reset could discard anything.
+assert(PSC.Config.enabled == true, "the scaler should be switched on by an install")
+assert(PSC.Config.scaleMode == "1440p",
+    "the layout should pin the 1440p canvas, got " .. tostring(PSC.Config.scaleMode))
+assert(PSC.Config.original and PSC.Config.original.uiScale == "0.65",
+    "the player's original scale must be recorded and survive the install's reset")
+assert(PSC.Scaler.applied >= 1, "the scale was never applied")
 
 -- Layout values landed. These are the Standard layout, which is a transcription
 -- of a live install rather than a set of round numbers - so they are spot checks
@@ -875,6 +919,77 @@ assert(PTT.Config.cursorOffsetX == 19,
     "a module being switched off must not be reset out from under the player")
 
 --------------------------------------------------------------------------------
+-- The scaler
+--
+-- The one module whose settings include a record of the player's UI from before
+-- the pack arrived. Four ways to lose or misuse it, each checked.
+--------------------------------------------------------------------------------
+
+local scalerModule = Modules.byKey.scaler
+
+-- 1. A clean re-run resets the scaler but keeps the recorded original. The
+--    flat ConfigManager Reset drops every key its defaults do not name, and
+--    `original` is one; without the carry, /pscaler restore would restore nothing.
+PSC.Config.original = { useUiScale = "1", uiScale = "0.9" }
+PSC.Config.strayScalerKey = true
+local scalerClean = Installer:NewChoices("standard")
+scalerClean.graphicsPreset = "none"
+scalerClean.autoSwitch = nil
+Installer:Apply(scalerClean)
+assert(PSC.Config.original and PSC.Config.original.uiScale == "0.9",
+    "resetting the scaler threw away the player's original scale")
+assert(PSC.Config.strayScalerKey == nil, "the scaler reset should still clear stray keys")
+assert(PSC.Config.scaleMode == "1440p", "the canvas should be back on after the reset")
+
+-- 2. Unticking a scaler that was never on does not call Disable. With nothing
+--    recorded, the real Disable approximates a scale of its own, which would
+--    change the UI of somebody who only unticked a box. The fixture's Disable
+--    asserts on exactly that.
+PSC.Config.enabled = false
+PSC.Config.original = nil
+local noScaler = Installer:NewChoices("standard")
+noScaler.modules.scaler = false
+noScaler.graphicsPreset = "none"
+noScaler.autoSwitch = nil
+local noScalerResult = Installer:Apply(noScaler)
+assert(#noScalerResult.failures == 0,
+    "unticking an unused scaler failed: " .. table.concat(noScalerResult.failures, "; "))
+assert(PSC.Config.enabled == false and PSC.Config.original == nil,
+    "unticking an unused scaler must leave it exactly as it was")
+
+-- 3. A preview on a UI that was never scaled undoes cleanly: the scaler goes
+--    back off through Disable (which restores the scale Enable recorded), and
+--    the mode it was in comes back.
+PSC.Config.scaleMode = "pixelPerfect"
+local restoredBefore = PSC.Scaler.restored
+assert(PUI.Preview:Start("standard", Installer:NewChoices("standard")), "scaler preview did not start")
+assert(PSC.Config.enabled == true and PSC.Config.scaleMode == "1440p", "preview did not apply the canvas")
+assert(PSC.Config.original ~= nil, "preview must record the original scale before changing it")
+PUI.Preview:Revert()
+assert(PSC.Config.enabled == false, "undoing a preview must switch the scaler back off")
+assert(PSC.Config.scaleMode == "pixelPerfect", "undoing a preview must put the scale mode back")
+assert(PSC.Scaler.restored == restoredBefore + 1, "undoing a preview must hand the original scale back")
+assert(Modules:IsEnabled(scalerModule) == false, "scaler should read as off after the undo")
+
+-- 4. Every layout fits its canvas. 1440 units tall, and 2304 wide on the
+--    narrowest common screen (16:10); a frame whose edge is past either is off
+--    screen for somebody, which is the bug the canvas exists to fix.
+local HALF_HEIGHT, HALF_WIDTH = 720, 1152
+for _, entry in ipairs(Layouts:Sorted()) do
+    assert(entry.layout.overrides.scaler.scaleMode == Layouts.CANVAS,
+        entry.key .. " must pin the " .. Layouts.CANVAS .. " canvas its positions were drawn on")
+    for unitKey, unit in pairs(entry.layout.overrides.unitframes.units) do
+        if unit.x and unit.y then
+            local w, h = unit.width or 240, unit.height or 46
+            assert(math.abs(unit.y) + h / 2 <= HALF_HEIGHT,
+                entry.key .. "." .. unitKey .. " runs off the top or bottom of the canvas")
+            assert(math.abs(unit.x) + w / 2 <= HALF_WIDTH,
+                entry.key .. "." .. unitKey .. " runs off the side of a 16:10 canvas")
+        end
+    end
+end
+
+--------------------------------------------------------------------------------
 -- A module that will override the layout says so
 --
 -- PeaversChat has bisect modes that take features away and stash the real
@@ -1097,7 +1212,7 @@ local idle = Stubs.Drive(function() end, 144, 1 / 144)
 
 return {
     {
-        name = "installing the pack, four modules and a graphics preset",
+        name = "installing the pack, five modules and a graphics preset",
         callsPerFrame = 0,
         idleCallsPerSecond = 0,
         notes = installHops .. " calls into the module addons for the whole install, " ..

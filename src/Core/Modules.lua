@@ -302,6 +302,49 @@ Modules.list = {
         end,
     },
     {
+        key = "scaler",
+        folder = "PeaversScaler",
+        label = "Scaler",
+        role = "display",
+        blurb = "Sets the UI scale the layouts were drawn at, so they land in the same place on any screen.",
+        slash = "/pscaler",
+
+        IsEnabled = function(_, ref)
+            return ref.Config and ref.Config.enabled == true
+        end,
+
+        -- Scaler:Enable records the player's own Blizzard scale before its first
+        -- write, and Disable hands that back, so both go through the addon rather
+        -- than flipping the flag.
+        --
+        -- Off when already off does nothing. Disable with no recorded original
+        -- falls back to an approximate scale of its own, which would change the
+        -- UI of somebody who never used the scaler and only unticked its box.
+        SetEnabled = function(_, ref, on)
+            if not on and not (ref.Config and ref.Config.enabled) then return end
+            Call(ref, on and "Scaler:Enable" or "Scaler:Disable")
+        end,
+
+        Refresh = function(_, ref)
+            if ref.Config and ref.Config.enabled then
+                Call(ref, "Scaler:Apply")
+            end
+        end,
+
+        -- The flat ConfigManager Reset drops every key the defaults do not name,
+        -- and `original` - the player's scale from before PeaversScaler ever
+        -- touched it - is exactly such a key. Losing it would turn "reset first"
+        -- into "forget what my UI used to look like", and /pscaler restore into a
+        -- command that restores nothing. So it is carried across the reset.
+        Reset = function(_, ref)
+            local config = ref.Config
+            local original = config.original
+            config:Reset()
+            config.original = original
+            config:Save()
+        end,
+    },
+    {
         key = "performance",
         folder = "PeaversPerformance",
         label = "Performance",
@@ -409,7 +452,15 @@ function Modules:Reset(module)
     local config = self:ConfigOf(module)
     if not config or type(config.Reset) ~= "function" then return false end
 
-    local ok, err = pcall(config.Reset, config)
+    -- A module that keeps state its defaults do not describe - PeaversScaler's
+    -- record of the player's original scale - declares a Reset of its own that
+    -- carries it across. Everything else gets the config's own Reset directly.
+    local ok, err
+    if module.Reset then
+        ok, err = pcall(module.Reset, module, self:Ref(module))
+    else
+        ok, err = pcall(config.Reset, config)
+    end
     if not ok then
         failures[#failures + 1] = module.folder .. " reset: " .. tostring(err)
     end
