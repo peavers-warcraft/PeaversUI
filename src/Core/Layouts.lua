@@ -282,8 +282,14 @@ Layouts.list = {
                 -- Transcribed with the rest of Standard. The player's bar takes
                 -- the Cooldown Manager's width and parks under it, which is why
                 -- it carries no icon of its own - the row above it is already a
-                -- line of icons. On a client with no Cooldown Manager both fall
-                -- back to the position below, which is where it sits anyway.
+                -- line of icons.
+                --
+                -- The positions below are the fallback for a client with no
+                -- Cooldown Manager to anchor to, which is every Classic client.
+                -- They keep the heights from the live install and centre the x,
+                -- because the x it was dragged to on retail is an artefact of
+                -- the anchor: with the anchor gone it would put the bar out at
+                -- the left of the screen rather than under the player.
                 units = {
                     player = {
                         enabled = true,
@@ -295,18 +301,21 @@ Layouts.list = {
                         showIcon = false,
                         showSpellName = true, showCastTime = true,
                         framePoint = "CENTER", frameRelativePoint = "CENTER",
-                        frameX = -491, frameY = -81,
+                        frameX = 0, frameY = -81,
                         hideBlizzard = true,
                     },
                     -- Off, but positioned, so switching one on from Edit Mode
-                    -- puts it where it belongs rather than in the middle.
+                    -- puts it somewhere sensible rather than wherever the last
+                    -- person to drag it left it.
                     target = {
                         enabled = false, width = 193, height = 22,
-                        frameX = -485, frameY = 15, hideBlizzard = true,
+                        framePoint = "CENTER", frameRelativePoint = "CENTER",
+                        frameX = 0, frameY = 15, hideBlizzard = true,
                     },
                     focus = {
                         enabled = false, width = 180, height = 20,
-                        frameX = -482, frameY = 43, hideBlizzard = true,
+                        framePoint = "CENTER", frameRelativePoint = "CENTER",
+                        frameX = 0, frameY = 43, hideBlizzard = true,
                     },
                     pet = { enabled = false },
                 },
