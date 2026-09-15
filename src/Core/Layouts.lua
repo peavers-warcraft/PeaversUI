@@ -156,6 +156,7 @@ Layouts.list = {
                 enabled = true,
                 squareShape = true,
                 size = 155,
+                scale = 1,
                 borderSize = 0,
                 anchorEnabled = true,
                 anchor = "TOPRIGHT",
@@ -268,13 +269,9 @@ Layouts.list = {
                 hideInCombat = "never",
             },
             systembars = {
-                -- Tucked under the minimap in the top-right corner rather than
-                -- floating at the right edge, so the whole corner reads as one
-                -- block of instrumentation.
-                framePoint = "TOPRIGHT",
-                frameX = 0,
-                frameY = -155,
-                frameWidth = 157,
+                -- No position here, in this layout or any other: the bars are
+                -- docked under the minimap by the loop at the bottom of this
+                -- file, which is what puts them at TOPRIGHT, 0, -155, 157 wide.
                 barHeight = 13,
                 -- Negative spacing overlaps the bars by a pixel, which closes
                 -- the seam between them into one solid stack.
@@ -352,7 +349,11 @@ Layouts.list = {
                 enabled = true,
                 squareShape = true,
                 size = 130,
+                scale = 1,
+                anchorEnabled = true,
                 anchor = "TOPRIGHT",
+                offsetX = 0,
+                offsetY = 0,
                 zoneTextMode = "hidden",
                 hideZoomButtons = true,
                 collectButtons = true,
@@ -387,10 +388,6 @@ Layouts.list = {
                 healthBarHeight = 5,
             },
             systembars = {
-                framePoint = "RIGHT",
-                frameX = -14,
-                frameY = 0,
-                frameWidth = 150,
                 barHeight = 14,
                 showTitleBar = false,
                 showFrameBackground = true,
@@ -464,7 +461,11 @@ Layouts.list = {
                 enabled = true,
                 squareShape = true,
                 size = 140,
+                scale = 1,
+                anchorEnabled = true,
                 anchor = "TOPRIGHT",
+                offsetX = 0,
+                offsetY = 0,
                 zoneTextMode = "hidden",
                 hideZoomButtons = true,
                 collectButtons = true,
@@ -500,10 +501,6 @@ Layouts.list = {
                 healthBarPosition = "bottom",
             },
             systembars = {
-                framePoint = "BOTTOMRIGHT",
-                frameX = -12,
-                frameY = 12,
-                frameWidth = 120,
                 barHeight = 8,
                 showTitleBar = false,
                 showFrameBackground = false,
@@ -586,7 +583,11 @@ Layouts.list = {
                 enabled = true,
                 squareShape = true,
                 size = 150,
+                scale = 1,
+                anchorEnabled = true,
                 anchor = "TOPRIGHT",
+                offsetX = 0,
+                offsetY = 0,
                 zoneTextMode = "hidden",
                 collectButtons = true,
                 -- Always visible: on a progression night the boss mod and the
@@ -624,10 +625,6 @@ Layouts.list = {
                 hideInCombat = "units",
             },
             systembars = {
-                framePoint = "RIGHT",
-                frameX = -20,
-                frameY = 0,
-                frameWidth = 180,
                 barHeight = 16,
                 showTitleBar = false,
                 showFrameBackground = true,
@@ -637,6 +634,64 @@ Layouts.list = {
         },
     },
 }
+
+--------------------------------------------------------------------------------
+-- System bars dock to the minimap
+--
+-- The one piece of arithmetic in this file, and the reason it is arithmetic
+-- rather than four more numbers: in every layout the bars sit directly against
+-- the minimap's inner edge, so the corner reads as a single block of
+-- instrumentation whichever card was clicked. Typed by hand, that relationship
+-- lasted exactly until somebody changed one layout's minimap size and not its
+-- bars - which is how three of the four ended up with bars floating at the
+-- right edge of the screen, nowhere near the map.
+--
+-- Mirrors PeaversMiniMap's own placement (Square:Apply): the cluster is pinned
+-- to `anchor` on UIParent, its offsets point inward from that corner, and its
+-- scale applies to the offsets as well as the size. PeaversSystemBars positions
+-- its frame against UIParent too, so the bars take the same corner and step
+-- past the map by its scaled size - below it for a top corner, above it for a
+-- bottom one.
+--
+-- The bars overhang the map by two pixels. That is transcribed, not invented:
+-- it is what the Standard install was set to by eye, and matching it keeps every
+-- layout looking like that screen rather than like a slightly different one.
+--
+-- Locked, because the position is a consequence of the minimap's and dragging
+-- the bars away breaks the only thing it is for. Edit Mode can still move them.
+--------------------------------------------------------------------------------
+
+local DOCK_OVERHANG = 2
+
+-- Which way "inward" is from each corner. The same table PeaversMiniMap keeps
+-- as Square.ANCHORS, restated because this file loads without that addon.
+local CORNERS = {
+    TOPRIGHT    = { x = -1, y = -1 },
+    TOPLEFT     = { x = 1,  y = -1 },
+    BOTTOMRIGHT = { x = -1, y = 1 },
+    BOTTOMLEFT  = { x = 1,  y = 1 },
+}
+
+-- Write the docked position into a layout's systembars block.
+function Layouts.DockSystemBars(minimap, bars)
+    local corner = CORNERS[minimap.anchor] and minimap.anchor or "TOPRIGHT"
+    local inward = CORNERS[corner]
+    local scale = minimap.scale or 1
+    local edge = (minimap.size or 155) * scale
+
+    bars.framePoint = corner
+    bars.frameX = (minimap.offsetX or 0) * scale * inward.x
+    bars.frameY = ((minimap.offsetY or 0) * scale + edge) * inward.y
+    bars.frameWidth = edge + DOCK_OVERHANG
+    bars.lockPosition = true
+end
+
+for _, layout in pairs(Layouts.list) do
+    local overrides = layout.overrides
+    if overrides and overrides.minimap and overrides.systembars then
+        Layouts.DockSystemBars(overrides.minimap, overrides.systembars)
+    end
+end
 
 function Layouts:Get(key)
     return self.list[key]

@@ -485,6 +485,43 @@ for _, entry in ipairs(Layouts:Sorted()) do
 end
 
 --------------------------------------------------------------------------------
+-- System bars are docked to the minimap in every layout
+--
+-- The bars sit flush against the minimap's inner edge and overhang it by the
+-- same two pixels in every layout, so the corner reads as one block whichever
+-- card was clicked. The positions are derived rather than typed, and this is
+-- what keeps it that way: a layout that gains a hand-written frameY, or a
+-- minimap block that stops naming an offset the derivation relies on, fails
+-- here instead of drifting apart on somebody's screen.
+--------------------------------------------------------------------------------
+
+for _, entry in ipairs(Layouts:Sorted()) do
+    local map = entry.layout.overrides.minimap
+    local bars = entry.layout.overrides.systembars
+    assert(map and bars, entry.key .. " must configure both the minimap and the system bars")
+
+    for _, key in ipairs({ "anchor", "size", "scale", "offsetX", "offsetY" }) do
+        assert(map[key] ~= nil, entry.key .. ".minimap must name " .. key ..
+            " - the bars are docked from it, and a value left to whatever the player had would move them")
+    end
+
+    local edge = map.size * map.scale
+    assert(bars.framePoint == map.anchor,
+        entry.key .. " system bars are not anchored to the minimap's corner")
+    assert(bars.frameX == -map.offsetX * map.scale, entry.key .. " system bars are not aligned with the minimap")
+    assert(bars.frameY == -(map.offsetY * map.scale + edge),
+        entry.key .. " system bars are not directly under the minimap, got frameY " .. tostring(bars.frameY))
+    assert(bars.frameWidth == edge + 2, entry.key .. " system bars are not the minimap's width")
+    assert(bars.lockPosition == true, entry.key .. " system bars should be locked in place")
+end
+
+-- The transcription still holds: Standard derives to exactly what was on screen.
+local standardBars = Layouts:Get("standard").overrides.systembars
+assert(standardBars.framePoint == "TOPRIGHT" and standardBars.frameX == 0
+    and standardBars.frameY == -155 and standardBars.frameWidth == 157,
+    "docking moved the Standard system bars away from the transcribed position")
+
+--------------------------------------------------------------------------------
 -- Detection
 --------------------------------------------------------------------------------
 
