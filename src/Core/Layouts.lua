@@ -739,6 +739,51 @@ for _, layout in pairs(Layouts.list) do
     end
 end
 
+--------------------------------------------------------------------------------
+-- Revisions
+--
+-- A layout's revision goes up whenever a change to it would look different on
+-- somebody's screen. An install records the revision it applied, and nothing
+-- newer is ever written unless the player chose to follow the latest layout -
+-- see Core/Versioning.lua.
+--
+-- Bump a layout by adding the next number here, in the same commit as the
+-- change, with one sentence a player would understand: it is printed in chat
+-- when the update is applied. Revision 1 is everything installed before
+-- revisions existed.
+--------------------------------------------------------------------------------
+
+local DOCKED_CHAT_SCALE = "System bars docked under the minimap, plain chat tabs " ..
+    "with full channel names, and the UI scale pinned to 1440p so positions match on any screen."
+
+Layouts.changelog = {
+    standard = {
+        [1] = "First release.",
+        [2] = "Plain chat tabs with full channel names, and the UI scale pinned to " ..
+              "1440p so positions match on any screen.",
+    },
+    compact   = { [1] = "First release.", [2] = DOCKED_CHAT_SCALE },
+    cinematic = { [1] = "First release.", [2] = DOCKED_CHAT_SCALE },
+    raid      = { [1] = "First release.", [2] = DOCKED_CHAT_SCALE },
+}
+
+for key, layout in pairs(Layouts.list) do
+    local revision = 0
+    for number in pairs(Layouts.changelog[key] or {}) do
+        if number > revision then revision = number end
+    end
+    layout.revision = revision
+end
+
+function Layouts:ChangesFor(key, revision)
+    local log = self.changelog[key]
+    return log and log[revision] or nil
+end
+
+-- Not a layout. The wizard's "keep my current setup" choice, stored where a layout
+-- key would be: no overrides, no revision, nothing to update.
+Layouts.CURRENT = "current"
+
 function Layouts:Get(key)
     return self.list[key]
 end

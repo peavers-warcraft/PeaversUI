@@ -343,11 +343,26 @@ Steps.list.layout = {
             if not choices.graphicsTouched then
                 local layout = Layouts:Get(key)
                 choices.recommendedGraphics = layout and layout.graphics or nil
-                choices.graphicsPreset = choices.recommendedGraphics
+                -- Suggested but never preselected for somebody with a setup of
+                -- their own: graphics are not the question they came to answer.
+                if not choices.existing then
+                    choices.graphicsPreset = choices.recommendedGraphics
+                end
             end
 
             if not choices.autoSwitchTouched then
                 choices.autoSwitch = Layouts:AutoSwitchFor(key)
+            end
+
+            -- The one card that puts nothing on screen. Whatever was being
+            -- previewed goes back, and that is all.
+            if key == Layouts.CURRENT then
+                if PUI.Preview:IsActive() then PUI.Preview:Revert() end
+                if status then
+                    status:SetText("Nothing has changed - your modules stay exactly as they are.")
+                    status:SetTextColor(C.textMuted[1], C.textMuted[2], C.textMuted[3])
+                end
+                return
             end
 
             if not applyIt then return end
@@ -373,7 +388,22 @@ Steps.list.layout = {
         -- The four layouts
         ------------------------------------------------------------------------
         local y = -2
-        for _, entry in ipairs(Layouts:Sorted()) do
+
+        -- First, and selected, for anybody whose modules already hold settings
+        -- of their own. Only for them: to a new player it would be a card
+        -- offering to change nothing.
+        local entries = Layouts:Sorted()
+        if choices.existing then
+            table.insert(entries, 1, { key = Layouts.CURRENT, layout = {
+                name = "Keep my current setup",
+                tagline = "nothing is rewritten",
+                blurb = "Your modules stay exactly as they are - positions, sizes, " ..
+                        "colours and all. Choose this to add or remove modules or set " ..
+                        "up graphics without touching the look you already have.",
+            } })
+        end
+
+        for _, entry in ipairs(entries) do
             local card = SelectCard(page, {
                 width = width - 4,
                 height = 76,
@@ -646,19 +676,39 @@ Steps.list.review = {
 
         y = y - 4
 
-        local _, resetHeight = WrappedCheckbox(page, "Reset each module first", 0, y, width - 8, {
-            checked = choices.resetFirst ~= false,
-            description = "Puts every module back to its own defaults before the " ..
-                          "layout goes on, so nothing from an earlier setup survives. " ..
-                          "Settings you made outside the pack go too.",
-            onChange = function(checked)
-                choices.resetFirst = checked
-                -- The summary above describes what will happen, so it has to be
-                -- redrawn rather than left describing the other answer.
-                PUI.Wizard:Render()
-            end,
-        })
-        y = y - (resetHeight + 10)
+        -- Keeping the current setup has nothing to reset and nothing to follow,
+        -- so neither box is offered: both are questions about a layout that is
+        -- not being applied.
+        if choices.layout ~= Layouts.CURRENT then
+            local _, resetHeight = WrappedCheckbox(page, "Reset each module first", 0, y, width - 8, {
+                checked = choices.resetFirst ~= false,
+                description = "Puts every module back to its own defaults before the " ..
+                              "layout goes on, so nothing from an earlier setup survives. " ..
+                              "Settings you made outside the pack go too.",
+                onChange = function(checked)
+                    choices.resetFirst = checked
+                    -- The summary above describes what will happen, so it has to be
+                    -- redrawn rather than left describing the other answer.
+                    PUI.Wizard:Render()
+                end,
+            })
+            y = y - (resetHeight + 10)
+
+            -- Off unless ticked, on a first run and on every run after: pack
+            -- updates changing somebody's screen has to be something they chose.
+            local layout = Layouts:Get(choices.layout)
+            local _, trackHeight = WrappedCheckbox(page, "Keep this layout up to date", 0, y, width - 8, {
+                checked = choices.track == PUI.Versioning.LATEST,
+                description = "Off: pack updates never change your interface. On: when an " ..
+                              "update changes the " .. (layout and layout.name or "chosen") ..
+                              " layout it is re-applied the next time you log in, over any of " ..
+                              "its settings you have changed, and /pui undo reverses it.",
+                onChange = function(checked)
+                    choices.track = checked and PUI.Versioning.LATEST or PUI.Versioning.PINNED
+                end,
+            })
+            y = y - (trackHeight + 10)
+        end
 
         local _, ruleY = W:CreateSeparator(page, 0, y, width)
         y = ruleY - 4

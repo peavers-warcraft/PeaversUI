@@ -138,6 +138,41 @@ function ConfigUI:BuildOverviewPage(parentFrame)
 
     y = Paragraph(parentFrame, summary, y, width, { gap = GAP_ROW })
 
+    -- Layout updates, said plainly. "An update never changes your screen unless
+    -- you asked" is the promise people most need to be able to check.
+    local version = PUI.Versioning:Status()
+    if version.installed and version.name then
+        local line = ("%s layout, revision %s of %d. "):format(
+            version.name, tostring(version.revision or "?"), version.latest)
+        if version.track == PUI.Versioning.LATEST then
+            line = line .. "Following the latest: a pack update that changes this " ..
+                "layout re-applies it when you log in, and /pui undo reverses it."
+        else
+            line = line .. "Pinned: pack updates never change it."
+            if version.behind then
+                line = line .. " A newer revision is available: " ..
+                    (PUI.Layouts:ChangesFor(version.layout, version.latest) or "") ..
+                    " /pui update applies it once."
+            end
+        end
+        y = Paragraph(parentFrame, line, y, width, { gap = GAP_ROW })
+
+        local follow = W:CreateCheckbox(parentFrame, "Keep this layout up to date", {
+            checked = version.track == PUI.Versioning.LATEST,
+            description = "Pack updates re-apply it at login, over your own changes to it.",
+            width = width,
+            onChange = function(checked)
+                if checked then
+                    PUI.Versioning:Follow()
+                else
+                    PUI.Versioning:SetTrack(PUI.Versioning.PINNED)
+                end
+            end,
+        })
+        follow:SetPoint("TOPLEFT", INDENT, y)
+        y = y - 40
+    end
+
     local run = W:CreateButton(parentFrame,
         installed and "Run the installer again" or "Run the installer", {
         variant = "primary",
@@ -252,23 +287,10 @@ function ConfigUI:BuildLayoutPage(parentFrame)
             width = ACTION_WIDTH,
             height = 22,
             onClick = function()
-                local choices = Installer:NewChoices(entry.key)
-
-                -- Keep what is already on, rather than the roster of what is
-                -- installed: someone who switched chat off in step two should
-                -- not have it come back because they tried another layout.
-                for _, module in ipairs(Modules:OfRole("display")) do
-                    choices.modules[module.key] = Modules:IsAvailable(module)
-                        and Modules:IsEnabled(module)
-                        or false
-                end
-
-                -- Graphics were never asked about on this path, so the plan is
-                -- dropped rather than passed as "none": passing it would count
-                -- as an answer and switch an existing auto-switch setup off.
-                choices.autoSwitch = nil
-                choices.graphicsPreset = "none"
-                Installer:Apply(choices)
+                -- What is switched on stays on, graphics are not touched, and
+                -- nothing is reset first: this page says it rewrites the
+                -- layout's settings, so that is all it does.
+                Installer:Apply(PUI.Versioning:ChoicesFor(entry.key))
 
                 PeaversCommons.Utils.Print(PUI, entry.layout.name .. " layout applied.")
                 ConfigUI:OpenOptions("layouts")

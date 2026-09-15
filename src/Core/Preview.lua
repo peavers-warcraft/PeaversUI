@@ -223,16 +223,20 @@ function Preview:Revert()
 
     for _, module in ipairs(Modules:OfRole("display")) do
         if Modules:IsAvailable(module) then
+            -- Toggle first and only if it changed, then values. Switching unit
+            -- frames on re-enables every frame, so doing it after the restore,
+            -- or when they were already on, turned a frame the player had
+            -- switched off - focus, say - back on.
+            local wasEnabled = state.modules and state.modules[module.key]
+            if wasEnabled ~= nil and wasEnabled ~= Modules:IsEnabled(module) then
+                Modules:SetEnabled(module, wasEnabled)
+            end
+
             local taken = state.taken and state.taken[module.key]
             local config = Modules:ConfigOf(module)
             if taken and config then
                 Restore(config, taken)
                 Modules.Call(Modules:Ref(module), "Config:Save")
-            end
-
-            local wasEnabled = state.modules and state.modules[module.key]
-            if wasEnabled ~= nil then
-                Modules:SetEnabled(module, wasEnabled)
             end
 
             Modules:Refresh(module)
@@ -283,6 +287,92 @@ function Preview:AnnouncePending()
     PeaversCommons.Utils.Print(PUI,
         "you were previewing the " .. name .. " layout when you last logged out. " ..
         "Type /pui undo to put your old settings back, or /pui keep to stop asking.")
+    return true
+end
+
+--------------------------------------------------------------------------------
+-- Layout updates
+--
+-- A player following the latest layout gets a new revision applied at login.
+-- That is the one write the pack makes without a click in the same session, so
+-- it carries the same undo a preview does - the same snapshot, on disk before
+-- the first change - in a slot of its own. Its own slot because an update is not
+-- a preview: closing the installer must not undo it, and the interrupted-preview
+-- message at login must not describe it.
+--------------------------------------------------------------------------------
+
+local function Take(overrides)
+    local state = { taken = {}, modules = {} }
+    for _, module in ipairs(Modules:OfRole("display")) do
+        if Modules:IsAvailable(module) then
+            state.modules[module.key] = Modules:IsEnabled(module)
+            local block = overrides[module.key]
+            local config = Modules:ConfigOf(module)
+            if block and config then
+                state.taken[module.key] = Capture(config, block)
+            end
+        end
+    end
+    return state
+end
+
+-- Put a taken state back. Toggles first and only where they changed, then
+-- values: switching unit frames on re-enables every frame, so doing it after the
+-- restore, or when they were already on, would switch a frame the player had
+-- turned off straight back on.
+local function Put(state)
+    for _, module in ipairs(Modules:OfRole("display")) do
+        if Modules:IsAvailable(module) then
+            local wasEnabled = state.modules and state.modules[module.key]
+            if wasEnabled ~= nil and wasEnabled ~= Modules:IsEnabled(module) then
+                Modules:SetEnabled(module, wasEnabled)
+            end
+
+            local taken = state.taken and state.taken[module.key]
+            local config = Modules:ConfigOf(module)
+            if taken and config then
+                Restore(config, taken)
+                Modules.Call(Modules:Ref(module), "Config:Save")
+            end
+
+            Modules:Refresh(module)
+        end
+    end
+end
+
+--- @return boolean applied, string|nil reason
+function Preview:ApplyUpdate(layoutKey, choices)
+    local layout = Layouts:Get(layoutKey)
+    if not layout then return false, "Unknown layout." end
+    if InCombatLockdown() then
+        return false, "Not in combat - the layout update waits until the fight is over."
+    end
+
+    local state = Take(layout.overrides or {})
+    PUI.Config.updateRestore = {
+        layout = layoutKey,
+        fromRevision = PUI.Config.layoutRevision,
+        taken = Encode(state.taken),
+        modules = state.modules,
+    }
+    PUI.Config:Save()
+
+    PUI.Installer:Apply(choices)
+    return true
+end
+
+--- @return boolean undone, string|nil reason
+function Preview:UndoUpdate()
+    local stored = PUI.Config.updateRestore
+    if type(stored) ~= "table" then return false, "No layout update to undo." end
+    if InCombatLockdown() then
+        return false, "Not in combat - try again when the fight is over."
+    end
+
+    Put({ taken = Decode(stored.taken or {}), modules = stored.modules })
+
+    PUI.Config.updateRestore = nil
+    PUI.Config:Save()
     return true
 end
 

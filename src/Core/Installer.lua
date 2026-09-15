@@ -72,8 +72,12 @@ Installer.DeepMerge = DeepMerge
 -- @param layoutKey string  a key from PUI.Layouts.order
 -- @return table            { layout, graphicsPreset, modules = { [key] = bool } }
 function Installer:NewChoices(layoutKey)
-    local key = Layouts:Get(layoutKey) and layoutKey or "standard"
-    local layout = Layouts:Get(key)
+    -- "Keep my current setup" is a choice on the layout screen but not a layout:
+    -- it has no overrides, no graphics suggestion and no revision, hence the
+    -- empty table standing in for one.
+    local keepCurrent = layoutKey == Layouts.CURRENT
+    local key = (keepCurrent or Layouts:Get(layoutKey)) and layoutKey or "standard"
+    local layout = Layouts:Get(key) or {}
 
     local choices = {
         layout = key,
@@ -256,8 +260,11 @@ end
 -- @param choices table from NewChoices, with the wizard's answers filled in
 -- @return table   { applied = {labels}, skipped = {labels}, failures = {strings} }
 function Installer:Apply(choices)
-    local layout = Layouts:Get(choices.layout) or Layouts:Get("standard")
-    local overrides = layout.overrides or {}
+    -- Keeping the current setup applies no layout at all: nothing is reset and
+    -- no override is written, whatever the reset box says.
+    local keepCurrent = choices.layout == Layouts.CURRENT
+    local layout = not keepCurrent and (Layouts:Get(choices.layout) or Layouts:Get("standard")) or nil
+    local overrides = layout and layout.overrides or {}
 
     -- Drain anything left over from an earlier run so the report only ever
     -- describes this one.
@@ -282,14 +289,20 @@ function Installer:Apply(choices)
             -- It has to come before the toggle as well as before the layout: a
             -- reset restores the module's own default for its enabled flag,
             -- which would otherwise undo the choice made two screens back.
-            if wanted and choices.resetFirst then
+            if wanted and choices.resetFirst and not keepCurrent then
                 Modules:Reset(module)
             end
 
             -- Order matters: the toggle first, then the layout. Turning unit
             -- frames on switches every frame's `enabled` back to true, so a
             -- layout that wants target-of-target off has to be written after.
-            Modules:SetEnabled(module, wanted)
+            --
+            -- And only when the answer actually changes. Re-running "on" for a
+            -- module that is already on re-enables every unit frame, including
+            -- one the player switched off and the layout never mentions.
+            if wanted ~= Modules:IsEnabled(module) then
+                Modules:SetEnabled(module, wanted)
+            end
 
             if wanted then
                 local ok, err = ApplyOverrides(module, overrides[module.key])
@@ -311,14 +324,25 @@ function Installer:Apply(choices)
         end
     end
 
-    self:ApplyGraphics(choices.graphicsPreset, result, choices.autoSwitch)
+    -- A player with a setup of their own who never touched the graphics screen
+    -- was never asked about graphics, whatever the screen pre-filled: no plan,
+    -- so an auto-switch setup they already run is left running.
+    local plan = choices.autoSwitch
+    if choices.existing and not choices.graphicsTouched and not choices.autoSwitchTouched then
+        plan = nil
+    end
+    self:ApplyGraphics(choices.graphicsPreset, result, plan)
 
     -- Anything the module hops recorded along the way.
     for _, failure in ipairs(Modules:TakeFailures()) do
         result.failures[#result.failures + 1] = failure
     end
 
-    PUI.Config:MarkInstalled(choices)
+    -- A preview is not an install: it must not record a layout, a revision or a
+    -- finished run that nobody agreed to.
+    if not choices.isPreview then
+        PUI.Config:MarkInstalled(choices)
+    end
 
     return result
 end

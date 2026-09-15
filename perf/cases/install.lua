@@ -411,6 +411,7 @@ Load("Core/Modules.lua")
 Load("Core/Layouts.lua")
 Load("Core/Installer.lua")
 Load("Core/Preview.lua")
+Load("Core/Versioning.lua")
 Load("Core/Extras.lua")
 Load("Core/Harvest.lua")
 
@@ -1047,6 +1048,160 @@ assert(#cleanResult.warnings == 0,
     "nothing left to warn about once the module has been reset")
 
 _G.PeaversChat = nil
+
+--------------------------------------------------------------------------------
+-- Versioning: nobody's interface changes unless they asked
+--
+-- The pack's promise to people already using it. Every path by which a newer
+-- layout could reach somebody's screen is driven here, and every one of them
+-- has to need an explicit choice.
+--------------------------------------------------------------------------------
+
+local Versioning = PUI.Versioning
+
+-- Every layout has a revision, and a sentence saying what that revision changed.
+for _, entry in ipairs(Layouts:Sorted()) do
+    local revision = entry.layout.revision
+    assert(type(revision) == "number" and revision >= 1, entry.key .. " has no revision")
+    assert(Layouts:ChangesFor(entry.key, revision),
+        entry.key .. " revision " .. revision .. " has no changelog line")
+end
+
+-- Detecting a setup of the player's own, in both storage shapes.
+local freshModule = { key = "fresh", folder = "PeaversFresh", role = "display" }
+_G.PeaversFresh = { Config = FakeConfig({ size = 10, shortChannelNamesWithdrawn = false }) }
+assert(not Modules:HasCustomSettings(freshModule), "a module at its defaults is not a setup of the player's own")
+_G.PeaversFresh.Config.shortChannelNamesWithdrawn = true
+assert(not Modules:HasCustomSettings(freshModule), "a module's own one-time migration is not the player's choice")
+-- PeaversChat's padding split, exactly as it lands on a brand-new install.
+_G.PeaversFresh = { Config = FakeConfig({ padding = 6, paddingSplit = false,
+    paddingLeft = 8, paddingRight = 6, paddingTop = 6, paddingBottom = 6 }) }
+_G.PeaversFresh.Config.paddingSplit = true
+_G.PeaversFresh.Config.paddingLeft = 6
+assert(not Modules:HasCustomSettings(freshModule), "PeaversChat's padding migration is not the player's choice")
+_G.PeaversFresh.Config.paddingLeft = 9
+assert(Modules:HasCustomSettings(freshModule), "a padding the player chose is theirs")
+_G.PeaversFresh = { Config = FakeConfig({ size = 10, shortChannelNamesWithdrawn = true }) }
+_G.PeaversFresh.Config.size = 11
+assert(Modules:HasCustomSettings(freshModule), "a changed setting is a setup of the player's own")
+local aceShaped = { Config = { db = { sv = { profiles = { P = {} } }, keys = { profile = "P" } } } }
+_G.PeaversFresh = aceShaped
+assert(not Modules:HasCustomSettings(freshModule), "an empty AceDB profile is not a setup")
+aceShaped.Config.db.sv.profiles.P.width = 300
+assert(Modules:HasCustomSettings(freshModule), "anything stored in an AceDB profile is a setup")
+_G.PeaversFresh = nil
+assert(Modules:HasExistingSetup(), "after the installs above, the fixture holds a setup of its own")
+
+-- Keeping the current setup writes nothing: no reset even with the box ticked,
+-- no toggle re-run, no graphics.
+PUF.Config.units.targettarget.enabled = false
+PPERF.Config.autoSwitchEnabled = true
+PPERF.Config.autoSwitchRaid = "minimum"
+local keptBefore = Snapshot()
+local keep = Versioning:ChoicesFor(Layouts.CURRENT)
+keep.existing = true
+keep.resetFirst = true
+keep.graphicsPreset = "none"
+keep.autoSwitch = Layouts:AutoSwitchFor(Layouts.CURRENT)
+local keepResult = Installer:Apply(keep)
+assert(#keepResult.failures == 0, "keeping the current setup failed: " .. table.concat(keepResult.failures, "; "))
+local keptDifference = FirstDifference(keptBefore, Snapshot())
+assert(not keptDifference, "keeping the current setup changed a setting: " .. tostring(keptDifference))
+assert(PUF.Config.units.targettarget.enabled == false,
+    "keeping the current setup switched back on a frame the player had turned off")
+assert(PPERF.Config.autoSwitchEnabled == true and PPERF.Config.autoSwitchRaid == "minimum",
+    "keeping the current setup touched graphics nobody asked about")
+assert(PUI.Config.layout == Layouts.CURRENT and PUI.Config.layoutRevision == nil,
+    "a kept setup is recorded as such, with no layout revision")
+
+-- An existing player who picks a layout but never touches the graphics screen
+-- keeps their graphics, and keeps a frame the layout says nothing about.
+local picked = Installer:NewChoices("raid")
+picked.existing = true
+picked.resetFirst = false
+picked.graphicsPreset = "none"
+Installer:Apply(picked)
+assert(PPERF.Config.autoSwitchEnabled == true and PPERF.Config.autoSwitchRaid == "minimum",
+    "an existing player's graphics changed without the graphics screen being touched")
+assert(PUF.Config.units.player.x == -300, "the picked layout should still apply")
+
+-- The wizard's answer is recorded; applying a layout any other way leaves it.
+local tracked = Installer:NewChoices("standard")
+tracked.graphicsPreset = "none"
+tracked.autoSwitch = nil
+tracked.track = Versioning.LATEST
+Installer:Apply(tracked)
+assert(PUI.Config.layout == "standard" and PUI.Config.layoutRevision == Layouts:Get("standard").revision,
+    "an install must record the revision it applied")
+assert(PUI.Config.track == Versioning.LATEST, "the wizard's track choice must be recorded")
+Installer:Apply(Versioning:ChoicesFor("compact"))
+assert(PUI.Config.layout == "compact" and PUI.Config.track == Versioning.LATEST,
+    "applying a layout outside the wizard must not change the track")
+
+-- A preview is not an install.
+PUI.Config.layoutRevision = 1
+assert(PUI.Preview:Start("raid", Installer:NewChoices("raid")), "preview did not start")
+assert(PUI.Config.layout == "compact" and PUI.Config.layoutRevision == 1,
+    "a preview must not record itself as the installed layout")
+PUI.Preview:Revert()
+
+-- An install from before revisions: pinned to revision 1, told once.
+PUI.Config.installedVersion = "1.0.4"
+PUI.Config.layout = "standard"
+PUI.Config.layoutRevision = nil
+PUI.Config.track = nil
+PUI.Config.versioningNoticeShown = nil
+assert(Versioning:Migrate(), "an install from before revisions should be migrated")
+assert(PUI.Config.layoutRevision == 1 and PUI.Config.track == Versioning.PINNED,
+    "an old install must be pinned to revision 1")
+assert(Versioning:NoticeDue(), "a migrated install should be told about pinning")
+Versioning:ShowNotice()
+assert(not Versioning:NoticeDue(), "the notice is shown once")
+assert(not Versioning:Migrate(), "migration runs once")
+
+-- Pinned and behind: never updated.
+assert(Versioning:Status().behind, "revision 1 of standard should read as behind")
+assert(not Versioning:UpdateDue(), "a pinned account must never be updated")
+
+-- Following the latest: the whole layout comes back, never in combat, with an
+-- undo that puts the player's own values back and pins them.
+PUF.Config.units.player.x = -111
+PTT.Config.fontSize = 21
+PUF.Config.units.targettarget.enabled = false
+Versioning:SetTrack(Versioning.LATEST)
+assert(Versioning:UpdateDue(), "a following account that is behind is due an update")
+
+_G.InCombatLockdown = function() return true end
+assert(not Versioning:ApplyLatest(), "an update must not apply in combat")
+assert(PUF.Config.units.player.x == -111, "a refused update must change nothing")
+_G.InCombatLockdown = function() return false end
+
+assert(Versioning:ApplyLatest(), "the update should apply")
+assert(PUF.Config.units.player.x == -429 and PTT.Config.fontSize == 12,
+    "the update should re-apply the whole layout")
+-- Standard names target-of-target as on, and following the latest means taking
+-- the whole layout - so it is on now, and the undo has to be able to say so.
+assert(PUF.Config.units.targettarget.enabled == true,
+    "the update should apply every setting the layout names, frame toggles included")
+assert(PUI.Config.layoutRevision == Layouts:Get("standard").revision, "the update should record its revision")
+assert(PUI.Config.updateRestore, "an update must leave its undo on disk")
+assert(not PUI.Preview:IsActive(), "an update is not a preview: closing the installer must not undo it")
+assert(not Versioning:UpdateDue(), "an updated account is no longer due")
+
+assert(Versioning:Undo(), "the update should undo")
+assert(PUF.Config.units.player.x == -111 and PTT.Config.fontSize == 21,
+    "undo must put the player's own settings back")
+assert(PUF.Config.units.targettarget.enabled == false,
+    "undo must switch off again a frame the update switched on")
+assert(PUI.Config.track == Versioning.PINNED and PUI.Config.layoutRevision == 1,
+    "undo must pin the player back to the revision they had")
+assert(PUI.Config.updateRestore == nil, "the undo is used up")
+assert(not Versioning:UpdateDue(), "an undone update must not come straight back")
+
+-- Choosing to follow catches up at once, because the choice was just made.
+assert(Versioning:Follow(), "following should catch up straight away")
+assert(PUI.Config.track == Versioning.LATEST and PUF.Config.units.player.x == -429,
+    "following should apply the latest revision")
 
 --------------------------------------------------------------------------------
 -- The extras list is coherent

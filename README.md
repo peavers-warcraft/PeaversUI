@@ -45,6 +45,16 @@ Two deliberate limits. A module you switch **off** is not reset: turning somethi
 
 **Backing out changes nothing.** The module and graphics screens only edit a plan. The layout screen does change your interface as you click — that is the point of it — but closing the installer without finishing puts every one of those settings back exactly. Either way, walking away leaves the game as it was found.
 
+### Updates never rearrange your screen
+
+Every layout has a revision, and installing records the one you got. After that you are **pinned**: updating the pack changes nothing you can see, however much the layouts have moved on. A newer revision is mentioned on the settings page, and `/pui update` applies it once if you want it.
+
+Ticking **Keep this layout up to date** on the summary screen, or typing `/pui follow`, is the only way to have updates arrive by themselves. A pack update that changes your layout is then re-applied the next time you log in — the whole layout, over any of its settings you had changed — with what changed said in chat. `/pui undo` puts your previous settings back and pins you again, and `/pui pin` stops following.
+
+If your modules already hold settings of their own — you used the addons before the pack, or changed things since installing — the installer starts on **Keep my current setup**: nothing previewed, the reset unticked, your graphics left alone. `/pui apply` and the settings page's Apply buttons rewrite a layout's settings without resetting anything else.
+
+Installs from before revisions existed are pinned to the layout they have, and told so once.
+
 ### Trying a layout on
 
 Click one and your interface becomes it. Immediately, on your own screen, at your own resolution, with your own addons around it.

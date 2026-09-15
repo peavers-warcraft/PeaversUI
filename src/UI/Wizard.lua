@@ -30,7 +30,9 @@ local C = W.Colors
 -- therefore the one that sets the floor: a preset card and a context dropdown
 -- side by side both need room for a sentence.
 local FRAME_WIDTH = 760
-local FRAME_HEIGHT = 576
+-- Tall enough for the summary screen with both of its checkboxes under a row per
+-- module; still inside the 768-unit screen of an unscaled UI.
+local FRAME_HEIGHT = 640
 local CONTENT_INSET = 24
 local FOOTER_HEIGHT = 54
 -- Room for a two-line subtitle. At 76 the second line of every longer subtitle
@@ -407,7 +409,8 @@ function Wizard:EnterPreview(layoutKey)
     if not previewBar then BuildPreviewBar() end
 
     local layout = PUI.Layouts:Get(layoutKey)
-    previewBar.label:SetText("Trying: " .. (layout and layout.name or layoutKey))
+    previewBar.label:SetText("Trying: " .. (layout and layout.name
+        or (layoutKey == PUI.Layouts.CURRENT and "your current setup") or layoutKey))
 
     if frame then frame:Hide() end
     previewBar:Show()
@@ -440,6 +443,24 @@ function Wizard:Show(startStep)
     -- that half-remembers what you did last month. It does start from what is
     -- currently installed, which is not the same thing.
     self.choices = PUI.Installer:NewChoices(PUI.Config.layout)
+
+    -- Somebody whose modules already hold settings of their own - an existing
+    -- user of the addons who has just picked up the pack, or anyone re-running it
+    -- over a setup they have since changed - starts on "Keep my current setup",
+    -- with the reset off and graphics left alone. Nothing on their screen
+    -- changes until they click a layout, and then only as a preview until
+    -- Install. New players get the pack as it ships.
+    if PUI.Modules:HasExistingSetup() then
+        self.choices.existing = true
+        self.choices.layout = PUI.Layouts.CURRENT
+        self.choices.resetFirst = false
+        self.choices.graphicsPreset = "none"
+    end
+
+    -- Following future layout updates is only on because somebody ticked it: a
+    -- re-run keeps their last answer, a first run starts pinned.
+    self.choices.track = PUI.Config.installedVersion and PUI.Config.track
+        or PUI.Versioning.PINNED
     PUI.Steps:Reset()
 
     self.stepIndex = 1

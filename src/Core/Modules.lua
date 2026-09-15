@@ -482,4 +482,94 @@ function Modules:ConfigOf(module)
     return ref and ref.Config or nil
 end
 
+--------------------------------------------------------------------------------
+-- Has this player set anything up?
+--
+-- Asked when the installer opens, to decide whether it starts from "keep what I
+-- have" instead of from the pack's own layout. The signal is a setting that
+-- differs from the module's defaults: a module that has only ever run at its
+-- defaults has nothing to lose, and one with anything else - by hand or by an
+-- earlier install - does.
+--
+-- AceDB-backed configs store only what differs from the defaults, so a stored
+-- profile with anything in it is the answer. Flat configs store every key and
+-- keep their defaults beside them, so values are compared.
+--
+-- Wrong in the safe direction when it is wrong: a new player flagged as existing
+-- has to click a layout, and an existing player is never treated as new.
+--------------------------------------------------------------------------------
+
+-- Written by the modules themselves - debug switches, a scale snapshot, one-time
+-- migrations - so they say nothing about what the player chose.
+local NOT_A_CHOICE = {
+    DEBUG_ENABLED = true, debugMode = true, original = true,
+    shortChannelNamesWithdrawn = true, edgeToEdgeWithdrawn = true,
+    paddingSplit = true, padding = true,
+}
+
+-- PeaversChat splits its old single padding into four sides on first run, which
+-- on a brand-new install writes the legacy value over the left default. A side
+-- equal to that legacy value is the migration's doing, not the player's.
+local function Migrated(config, key)
+    if key ~= "paddingLeft" and key ~= "paddingRight"
+        and key ~= "paddingTop" and key ~= "paddingBottom" then
+        return false
+    end
+    local legacy = tonumber(config.padding)
+    return legacy ~= nil and tonumber(config[key]) == legacy
+end
+
+local function Differs(a, b)
+    if type(a) == "number" and type(b) == "number" then
+        return math.abs(a - b) > 1e-6
+    end
+    if type(a) ~= "table" or type(b) ~= "table" then
+        return a ~= b
+    end
+    for key, value in pairs(a) do
+        if Differs(value, b[key]) then return true end
+    end
+    for key in pairs(b) do
+        if a[key] == nil then return true end
+    end
+    return false
+end
+
+function Modules:HasCustomSettings(module)
+    local config = self:ConfigOf(module)
+    if type(config) ~= "table" then return false end
+
+    local db = rawget(config, "db")
+    if type(db) == "table" and type(db.sv) == "table" and type(db.keys) == "table" then
+        local stored = db.sv.profiles and db.sv.profiles[db.keys.profile]
+        if type(stored) ~= "table" then return false end
+        for key in pairs(stored) do
+            if not NOT_A_CHOICE[key] then return true end
+        end
+        return false
+    end
+
+    local defaults = rawget(config, "defaults")
+    if type(defaults) ~= "table" then return false end
+    for key, default in pairs(defaults) do
+        if not NOT_A_CHOICE[key] and not Migrated(config, key)
+            and Differs(config[key], default) then
+            return true
+        end
+    end
+    return false
+end
+
+-- @return boolean, string|nil  whether any running display module holds settings
+--                              of the player's own, and the first one found
+function Modules:HasExistingSetup()
+    for _, module in ipairs(self:OfRole("display")) do
+        if self:IsAvailable(module) then
+            local ok, custom = pcall(self.HasCustomSettings, self, module)
+            if ok and custom then return true, module.label end
+        end
+    end
+    return false
+end
+
 return Modules

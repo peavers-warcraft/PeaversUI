@@ -28,25 +28,11 @@ local function ApplyLayoutByName(name)
         return
     end
 
-    local choices = PUI.Installer:NewChoices(key)
-
-    -- Honour what is currently switched on rather than the full roster: this
-    -- command changes the arrangement, not the decision about which modules the
-    -- player wanted in the first place.
-    for _, module in ipairs(PUI.Modules:OfRole("display")) do
-        choices.modules[module.key] = PUI.Modules:IsAvailable(module)
-            and PUI.Modules:IsEnabled(module)
-            or false
-    end
-
-    -- Never from a slash command. Changing CVars is the one thing in the pack
-    -- that wants an explicit yes on a screen that explains it - and dropping the
-    -- plan entirely, rather than answering "none", is what stops this command
-    -- switching off an auto-switch setup the player already has.
-    choices.graphicsPreset = "none"
-    choices.autoSwitch = nil
-
-    local result = PUI.Installer:Apply(choices)
+    -- The arrangement and nothing else: modules stay as switched on, nothing is
+    -- reset first, and graphics are never touched from a slash command.
+    -- Versioning:ChoicesFor is the one definition of that, shared with the
+    -- settings page and layout updates.
+    local result = PUI.Installer:Apply(PUI.Versioning:ChoicesFor(key))
 
     Utils.Print(PUI, layout.name .. " layout applied to " .. #result.applied .. " module(s).")
     for _, failure in ipairs(result.failures) do
@@ -120,11 +106,29 @@ PeaversCommons.SlashCommands:Register(addonName, "pui", {
         end
     end,
     undo = function()
+        -- A preview in progress first, then the last layout update: the two
+        -- things the pack can have changed that somebody might want back.
         if PUI.Preview:Revert() then
             Utils.Print(PUI, "Preview undone - your settings are back as they were.")
-        else
-            Utils.Print(PUI, "Nothing to undo.")
+            return
         end
+        local ok, reason = PUI.Versioning:Undo()
+        if not ok then
+            Utils.Print(PUI, reason or "Nothing to undo.")
+        end
+    end,
+    follow = function()
+        local ok, reason = PUI.Versioning:Follow()
+        if not ok and reason then Utils.Print(PUI, reason) end
+    end,
+    pin = function()
+        PUI.Versioning:SetTrack(PUI.Versioning.PINNED)
+        Utils.Print(PUI, "Pinned. Pack updates will not change your layout; " ..
+            "/pui update applies a newer one whenever you want it.")
+    end,
+    update = function()
+        local ok, reason = PUI.Versioning:ApplyLatest()
+        if not ok and reason then Utils.Print(PUI, reason) end
     end,
     keep = function()
         -- Also the answer to the login message: it clears the outstanding
@@ -142,6 +146,14 @@ PeaversCommons.SlashCommands:Register(addonName, "pui", {
         Utils.Print(PUI, installed
             and ("installed with the " .. tostring(PUI.Config.layout) .. " layout (pack " .. installed .. ")")
             or "not installed yet - run /pui to set up the interface.")
+
+        local version = PUI.Versioning:Status()
+        if version.installed and version.name then
+            print(("  layout revision %s of %d, %s"):format(tostring(version.revision or "?"),
+                version.latest, version.track == PUI.Versioning.LATEST
+                    and "following the latest (/pui pin to stop)"
+                    or "pinned (/pui follow to keep it up to date)"))
+        end
 
         for _, module in ipairs(PUI.Modules.list) do
             local status = PUI.Modules:Status(module)
@@ -171,7 +183,10 @@ PeaversCommons.SlashCommands:Register(addonName, "pui", {
         print("  /pui share lua - Those profiles as Lua, ready for Extras.lua")
         print("  /pui apply <layout> - Apply a layout without the wizard")
         print("  /pui preview <layout> - Put a layout on screen to look at")
-        print("  /pui undo - Put your settings back after a preview")
+        print("  /pui undo - Put your settings back after a preview or a layout update")
+        print("  /pui follow - Keep your layout up to date with pack updates")
+        print("  /pui pin - Stop pack updates changing your layout (the default)")
+        print("  /pui update - Apply the newest revision of your layout once")
         print("  /pui keep - Stop treating a previewed layout as temporary")
         print("  /pui status - What is installed, and what is switched on")
         print("  /pui reset - Offer the installer again at next login")
@@ -184,6 +199,26 @@ PeaversCommons.SlashCommands:Register(addonName, "pui", {
 
 PeaversCommons.Events:Init(addonName, function()
     PUI.Config:Initialize()
+
+    -- Installs from before layouts had revisions are pinned to the one they
+    -- have, before anything below gets to look at them.
+    PUI.Versioning:Migrate()
+
+    -- The only thing the pack ever applies at login, and only for an account
+    -- that chose to follow the latest layout. Never over a loading screen and
+    -- never mid-pull: in combat it waits for the fight to end.
+    local function ApplyLayoutUpdate()
+        if not PUI.Versioning:UpdateDue() then return end
+        if InCombatLockdown() then
+            PeaversCommons.Events:RegisterEvent("PLAYER_REGEN_ENABLED", function()
+                if PUI.Versioning:UpdateDue() and not InCombatLockdown() then
+                    PUI.Versioning:ApplyLatest()
+                end
+            end)
+            return
+        end
+        PUI.Versioning:ApplyLatest()
+    end
 
     if PUI.ConfigUI and PUI.ConfigUI.Initialize then
         PUI.ConfigUI:Initialize()
@@ -214,6 +249,19 @@ PeaversCommons.Events:Init(addonName, function()
         -- itself while you were reading the login screen is the exact surprise
         -- the preview design exists to avoid.
         if PUI.Preview:AnnouncePending() then
+            return
+        end
+
+        -- Once, for installs made before layouts had revisions. Delayed past
+        -- the wall of login messages it would otherwise scroll away under.
+        if PUI.Versioning:NoticeDue() then
+            C_Timer.After(6, function()
+                if PUI.Versioning:NoticeDue() then PUI.Versioning:ShowNotice() end
+            end)
+        end
+
+        if PUI.Versioning:UpdateDue() then
+            C_Timer.After(3, ApplyLayoutUpdate)
             return
         end
 

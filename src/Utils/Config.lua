@@ -10,6 +10,9 @@
 -- opening on every login, and it is a version rather than a boolean so that a
 -- future pack release can offer a fresh pass ("the pack has new modules since
 -- you set this up") without also nagging people who are already done.
+--
+-- Next to it, `layoutRevision` and `track` are what keep a pack update from
+-- rearranging anybody's screen uninvited. See Core/Versioning.lua.
 --------------------------------------------------------------------------------
 
 local addonName, PUI = ...
@@ -26,9 +29,23 @@ local PUI_DEFAULTS = {
 
     -- What the last run chose. Kept so the settings page can say what is
     -- currently applied, and so re-opening the wizard starts where you left off
-    -- rather than back at the factory defaults.
+    -- rather than back at the factory defaults. "current" means the player kept
+    -- their own setup rather than taking a layout.
     layout = "standard",
     graphicsPreset = "none",
+
+    -- The revision of `layout` that was applied, and whether pack updates may
+    -- apply newer ones. Pinned unless the player chose otherwise, every time.
+    layoutRevision = nil,
+    track = "pinned",
+
+    -- false once an install from before revisions existed has been migrated,
+    -- true once the player has been told about pinning. nil for everybody else.
+    versioningNoticeShown = nil,
+
+    -- The undo for the last layout update applied at login, in the same shape as
+    -- previewRestore. Kept until the next update replaces it.
+    updateRestore = nil,
 
     -- [moduleKey] = true/false, the module toggles from step two. Absent means
     -- "never asked", which the installer reads as the module's own default
@@ -84,6 +101,16 @@ function PUI.Config:MarkInstalled(choices)
     if choices then
         self.layout = choices.layout or self.layout
         self.graphicsPreset = choices.graphicsPreset or self.graphicsPreset
+
+        local layout = PUI.Layouts and PUI.Layouts:Get(self.layout)
+        self.layoutRevision = layout and layout.revision or nil
+
+        -- Only the wizard asks about the track; every other way of applying a
+        -- layout leaves the answer the player already gave.
+        if choices.track then
+            self.track = choices.track
+        end
+
         if choices.modules then
             self.modules = {}
             for key, on in pairs(choices.modules) do
@@ -91,6 +118,9 @@ function PUI.Config:MarkInstalled(choices)
             end
         end
     end
+
+    -- Whoever just ran an install has had the choice in front of them.
+    self.versioningNoticeShown = true
     self:Save()
 end
 
