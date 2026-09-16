@@ -246,7 +246,10 @@ Layouts.list = {
                 positionEnabled = true,
                 chatPoint = "BOTTOMLEFT",
                 chatX = 0,
-                chatY = 22,
+                -- Off the bottom edge by more than the 22 it was dragged to on
+                -- retail: at that height the box reads as sitting on the floor
+                -- of the screen rather than resting above it.
+                chatY = 60,
                 chatWidth = 430,
                 chatHeight = 180,
             },
@@ -877,7 +880,7 @@ Layouts.changelog = {
         [2] = "Plain chat tabs with full channel names, and the UI scale pinned to " ..
               "1440p so positions match on any screen.",
         [3] = BLACK_CHAT,
-        [4] = CAST_BARS,
+        [4] = CAST_BARS .. " The chat window sits a little higher.",
     },
     compact   = { [1] = "First release.", [2] = DOCKED_CHAT_SCALE, [3] = BLACK_CHAT, [4] = CAST_BARS },
     cinematic = { [1] = "First release.", [2] = DOCKED_CHAT_SCALE, [3] = BLACK_CHAT, [4] = CAST_BARS },
