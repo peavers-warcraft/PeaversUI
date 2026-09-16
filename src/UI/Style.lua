@@ -114,10 +114,22 @@ Style.Accent = C.accent
 -- the player's own font settings are: this window is a few screens they see
 -- once, and matching the rest of the collection matters more than matching
 -- their bars.
+--
+-- IBM Plex Mono, which the collection already bundles and already licenses.
+-- NOT Theme.Fonts.display: that is AccidentalPresidency, and its own note in
+-- Theme.lua says what it is for - "anything an addon draws over the world: bar
+-- text, unit frame names, stat readouts". Setting a window of chrome in a
+-- condensed poster face made the thing read as a mockup of an interface rather
+-- than an interface, and short centred button labels were where it showed
+-- worst.
+--
+-- Mono is wider per character than a proportional face, so every fixed column
+-- and button width in this window is sized against these metrics. Changing this
+-- constant means re-checking all of them.
 local function Face()
     local Theme = PeaversCommons.Theme
-    local display = Theme and Theme.Fonts and Theme.Fonts.display
-    return display or "Fonts\\FRIZQT__.TTF"
+    local mono = Theme and Theme.Fonts and Theme.Fonts.monoRegular
+    return mono or "Fonts\\FRIZQT__.TTF"
 end
 
 --- Set a font string's size and alpha in one call.

@@ -372,7 +372,7 @@ local function BuildPreviewBar()
     undo:SetPoint("RIGHT", -10, 0)
 
     local back = Style.Button(previewBar, "Back to installer", {
-        variant = "primary", width = 132, height = 26,
+        variant = "primary", width = 152, height = 26,
         onClick = function() Wizard:ExitPreview(false) end,
     })
     back:SetPoint("RIGHT", undo, "LEFT", -6, 0)

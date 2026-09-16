@@ -40,6 +40,15 @@ local Installer = PUI.Installer
 -- Where the second column starts, and how much room the right-hand value keeps
 -- for itself. Two numbers, used by every table on every page, so the label
 -- column lines up from the first screen to the last.
+-- Where the second column starts, and how much room the right-hand value keeps
+-- for itself. Two numbers, used by every table on every page, so the label
+-- column lines up from the first screen to the last.
+--
+-- 152 is comfortable even in IBM Plex Mono, which is appreciably wider per
+-- character than a proportional face: the longest module name is "Performance"
+-- at eleven characters, needing about 86 of the 130 points this leaves. The
+-- blurb column beside it is the one that runs out of room, so spare width goes
+-- there rather than here.
 local LABEL_COL = 152
 local VALUE_COL = 96
 
@@ -417,7 +426,7 @@ Steps.list.layout = {
         ------------------------------------------------------------------------
         local hide = Style.Button(page, "Hide the installer and look", {
             variant = "secondary",
-            width = 200,
+            width = 240,
             onClick = function()
                 PUI.Wizard:EnterPreview(choices.layout)
             end,
@@ -425,10 +434,10 @@ Steps.list.layout = {
         hide:SetPoint("TOPLEFT", 0, y)
 
         status = Style.Label(page, "", Style.Size.value, Style.Alpha.muted, {
-            width = width - 216,
+            width = width - 256,
             wrap = true,
         })
-        status:SetPoint("TOPLEFT", 212, y - 4)
+        status:SetPoint("TOPLEFT", 252, y - 4)
 
         ------------------------------------------------------------------------
         -- Arriving on this screen
