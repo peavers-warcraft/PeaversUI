@@ -26,6 +26,10 @@ local PeaversCommons = _G.PeaversCommons
 local W = PeaversCommons.Widgets
 local C = W.Colors
 
+-- Every number this window is drawn with lives in Style, and nothing here
+-- restates one. See src/UI/Style.lua for the system and why it is that system.
+local Style = PUI.Style
+
 -- Wide enough for the graphics screen, which is the only two-column page and
 -- therefore the one that sets the floor: a preset card and a context dropdown
 -- side by side both need room for a sentence.
@@ -33,21 +37,21 @@ local FRAME_WIDTH = 760
 -- Tall enough for the summary screen with both of its checkboxes under a row per
 -- module; still inside the 768-unit screen of an unscaled UI.
 local FRAME_HEIGHT = 640
-local CONTENT_INSET = 24
-local FOOTER_HEIGHT = 54
--- Room for a two-line subtitle. At 76 the second line of every longer subtitle
--- ran through the header rule and into the page underneath it.
-local HEADER_HEIGHT = 92
+local CONTENT_INSET = Style.Pad.content
+local FOOTER_HEIGHT = 52
+-- Room for a three-line subtitle. At 76 the second line of every longer subtitle
+-- ran through the header rule and into the page underneath it, and the hero
+-- title sits lower than the old eyebrow-and-title pair did.
+local HEADER_HEIGHT = 104
 
 local frame          ---@type Frame
 local contentFrame   ---@type Frame
 local titleText      ---@type FontString
 local subtitleText   ---@type FontString
-local stepRail       ---@type Frame
+local stepText       ---@type FontString
 local backButton     ---@type Button
 local nextButton     ---@type Button
 local skipButton     ---@type Button
-local railDots = {}
 
 Wizard.stepIndex = 1
 Wizard.choices = nil
@@ -105,36 +109,29 @@ local function BuildFrame()
     ----------------------------------------------------------------------------
     -- Header
     ----------------------------------------------------------------------------
-    local eyebrow = W:CreateLabel(frame, "PEAVERS UI", {
-        font = "GameFontNormalSmall",
-        color = C.accent,
-    })
-    eyebrow:SetPoint("TOPLEFT", CONTENT_INSET, -18)
+    -- Title and one line of description. The accent eyebrow that used to sit
+    -- above the title was colour doing decoration rather than carrying state,
+    -- which is the habit this window is being broken of.
+    titleText = Style.Label(frame, "", Style.Size.hero, Style.Alpha.primary)
+    titleText:SetPoint("TOPLEFT", CONTENT_INSET, -24)
 
-    titleText = W:CreateLabel(frame, "", { size = 18, color = C.text })
-    titleText:SetPoint("TOPLEFT", CONTENT_INSET, -36)
-
-    subtitleText = W:CreateLabel(frame, "", {
-        font = "GameFontNormalSmall",
-        color = C.textMuted,
+    subtitleText = Style.Label(frame, "", Style.Size.value, Style.Alpha.secondary, {
         width = FRAME_WIDTH - (CONTENT_INSET * 2) - 40,
         wrap = true,
     })
-    subtitleText:SetPoint("TOPLEFT", CONTENT_INSET, -58)
+    subtitleText:SetPoint("TOPLEFT", CONTENT_INSET, -24 - Style.Size.hero - 8)
 
-    local close = W:CreateButton(frame, "x", {
-        variant = "ghost",
-        width = 24,
-        height = 24,
+    -- A text glyph rather than a bordered button: a boxed X in the corner
+    -- competes with the two real actions in the footer.
+    local close = Style.Button(frame, "\226\156\149", {
+        variant = "link", width = 28, height = 28,
         onClick = function() Wizard:Hide() end,
     })
-    close:SetPoint("TOPRIGHT", -8, -8)
+    close:SetPoint("TOPRIGHT", -10, -10)
 
-    local headerRule = frame:CreateTexture(nil, "ARTWORK")
+    local headerRule = Style.Hairline(frame, Style.Rule.chrome)
     headerRule:SetPoint("TOPLEFT", 0, -HEADER_HEIGHT)
     headerRule:SetPoint("TOPRIGHT", 0, -HEADER_HEIGHT)
-    headerRule:SetHeight(1)
-    headerRule:SetColorTexture(C.border[1], C.border[2], C.border[3], 1)
 
     ----------------------------------------------------------------------------
     -- Content
@@ -149,36 +146,33 @@ local function BuildFrame()
     ----------------------------------------------------------------------------
     -- Footer
     ----------------------------------------------------------------------------
-    local footerRule = frame:CreateTexture(nil, "ARTWORK")
+    local footerRule = Style.Hairline(frame, Style.Rule.chrome)
     footerRule:SetPoint("BOTTOMLEFT", 0, FOOTER_HEIGHT)
     footerRule:SetPoint("BOTTOMRIGHT", 0, FOOTER_HEIGHT)
-    footerRule:SetHeight(1)
-    footerRule:SetColorTexture(C.border[1], C.border[2], C.border[3], 1)
 
-    stepRail = CreateFrame("Frame", nil, frame)
-    stepRail:SetPoint("BOTTOMLEFT", CONTENT_INSET, 18)
-    stepRail:SetSize(200, 18)
+    -- Where you are, in words. The row of dots this replaces was a web motif
+    -- that said the same thing less clearly, in the accent, which belongs to
+    -- selection and the primary action alone.
+    stepText = Style.Label(frame, "", Style.Size.section, Style.Alpha.muted)
+    stepText:SetPoint("BOTTOMLEFT", CONTENT_INSET, 20)
 
-    nextButton = W:CreateButton(frame, "Next", {
-        variant = "primary",
-        width = 110,
+    nextButton = Style.Button(frame, "Next", {
+        variant = "primary", width = 110,
         onClick = function() Wizard:Next() end,
     })
-    nextButton:SetPoint("BOTTOMRIGHT", -CONTENT_INSET, 14)
+    nextButton:SetPoint("BOTTOMRIGHT", -CONTENT_INSET, 12)
 
-    backButton = W:CreateButton(frame, "Back", {
-        variant = "secondary",
-        width = 90,
+    backButton = Style.Button(frame, "Back", {
+        variant = "secondary", width = 92,
         onClick = function() Wizard:Back() end,
     })
     backButton:SetPoint("RIGHT", nextButton, "LEFT", -8, 0)
 
-    skipButton = W:CreateButton(frame, "Not now", {
-        variant = "ghost",
-        width = 90,
+    skipButton = Style.Button(frame, "Not now", {
+        variant = "link", width = 84,
         onClick = function() Wizard:Hide() end,
     })
-    skipButton:SetPoint("RIGHT", backButton, "LEFT", -4, 0)
+    skipButton:SetPoint("RIGHT", backButton, "LEFT", -6, 0)
 
     frame:Hide()
 end
@@ -208,46 +202,16 @@ local function NewPage()
 end
 
 --------------------------------------------------------------------------------
--- Step rail
+-- Where you are
 --
--- Five dots, the current one filled and widened into a pill. The point is to
--- answer "how much more of this is there" before the player has to ask, which
--- is most of what makes a wizard tolerable.
+-- "Step 3 of 5", small and dim in the corner of the footer. It answers "how
+-- much more of this is there" before anybody has to ask, which is most of what
+-- makes a wizard tolerable - and it answers it in words rather than in a row of
+-- coloured dots nobody has to decode.
 --------------------------------------------------------------------------------
 local function UpdateRail()
-    local steps = PUI.Steps.order
-    local x = 0
-
-    for i = 1, #steps do
-        local dot = railDots[i]
-        if not dot then
-            dot = stepRail:CreateTexture(nil, "ARTWORK")
-            dot:SetHeight(4)
-            railDots[i] = dot
-        end
-
-        local isCurrent = (i == Wizard.stepIndex)
-        local isDone = (i < Wizard.stepIndex)
-
-        dot:ClearAllPoints()
-        dot:SetPoint("LEFT", stepRail, "LEFT", x, 0)
-        dot:SetWidth(isCurrent and 20 or 8)
-
-        if isCurrent then
-            dot:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 1)
-        elseif isDone then
-            dot:SetColorTexture(C.textMuted[1], C.textMuted[2], C.textMuted[3], 0.8)
-        else
-            dot:SetColorTexture(C.border[1], C.border[2], C.border[3], 1)
-        end
-
-        dot:Show()
-        x = x + (isCurrent and 20 or 8) + 6
-    end
-
-    for i = #steps + 1, #railDots do
-        railDots[i]:Hide()
-    end
+    if not stepText then return end
+    stepText:SetText(("STEP %d OF %d"):format(Wizard.stepIndex, #PUI.Steps.order))
 end
 
 --------------------------------------------------------------------------------
@@ -270,13 +234,14 @@ function Wizard:Render()
         -- A step that throws would otherwise leave a blank panel and no
         -- explanation, because WoW eats Lua errors unless the player has turned
         -- them on. Say so on the panel itself.
-        local message = W:CreateLabel(page,
+        local message = Style.Label(page,
             "This page failed to draw: " .. tostring(err) ..
-            "\n\nThe rest of the installer still works - use Back, or close and run /pui.", {
-            color = C.danger,
-            width = FRAME_WIDTH - (CONTENT_INSET * 2) - 20,
-            wrap = true,
-        })
+            "\n\nThe rest of the installer still works - use Back, or close and run /pui.",
+            Style.Size.value, Style.Alpha.primary, {
+                color = C.danger,
+                width = FRAME_WIDTH - (CONTENT_INSET * 2) - 20,
+                wrap = true,
+            })
         message:SetPoint("TOPLEFT", 0, -8)
     end
 
@@ -380,23 +345,28 @@ local function BuildPreviewBar()
         edgeSize = 1,
     })
     previewBar:SetBackdropColor(C.bgBase[1], C.bgBase[2], C.bgBase[3], 0.97)
-    previewBar:SetBackdropBorderColor(C.accent[1], C.accent[2], C.accent[3], 1)
+    previewBar:SetBackdropBorderColor(1, 1, 1, Style.Rule.chrome)
 
-    previewBar.label = W:CreateLabel(previewBar, "", { color = C.text })
-    previewBar.label:SetPoint("LEFT", 12, 0)
+    -- The same accent bar a selected row wears, for the same reason: this strip
+    -- exists to say a choice is currently being tried on. Outlining the whole
+    -- thing in accent said it louder without saying it more clearly.
+    local mark = previewBar:CreateTexture(nil, "OVERLAY")
+    mark:SetPoint("TOPLEFT", 0, 0)
+    mark:SetPoint("BOTTOMLEFT", 0, 0)
+    mark:SetWidth(Style.Row.bar)
+    mark:SetColorTexture(Style.Accent[1], Style.Accent[2], Style.Accent[3], 1)
 
-    local undo = W:CreateButton(previewBar, "Undo", {
-        variant = "secondary",
-        width = 70,
-        height = 24,
+    previewBar.label = Style.Label(previewBar, "", Style.Size.label, Style.Alpha.primary)
+    previewBar.label:SetPoint("LEFT", Style.Row.inset, 0)
+
+    local undo = Style.Button(previewBar, "Undo", {
+        variant = "link", width = 56, height = 24,
         onClick = function() Wizard:ExitPreview(true) end,
     })
     undo:SetPoint("RIGHT", -10, 0)
 
-    local back = W:CreateButton(previewBar, "Back to installer", {
-        variant = "primary",
-        width = 130,
-        height = 24,
+    local back = Style.Button(previewBar, "Back to installer", {
+        variant = "primary", width = 132, height = 24,
         onClick = function() Wizard:ExitPreview(false) end,
     })
     back:SetPoint("RIGHT", undo, "LEFT", -6, 0)
