@@ -110,32 +110,18 @@ Style.Accent = C.accent
 -- Text
 --------------------------------------------------------------------------------
 
--- The face the installer's text is drawn with. One typeface, whatever the
--- player's own font settings are: this window is a few screens they see once,
--- and matching the rest of the collection matters more than matching their bars.
+-- The face everything in the installer is drawn with, buttons included. One
+-- typeface, whatever the player's own font settings are: this window is a few
+-- screens they see once, and matching the rest of the collection matters more
+-- than matching their bars.
 --
--- Button labels are the one exception, and use ButtonFace below. The split is
--- deliberate and deliberately narrow: the display face carries headings, rows
--- and paragraphs perfectly well, and is weakest on a short centred label boxed
--- inside a control - which was the one place this window read as unfinished.
--- Setting the whole window in the other face fixed the buttons and cost
--- everything else.
+-- A second face for button labels alone was tried and taken back out. Noted
+-- here only so it is not tried a third time: it did not read as a deliberate
+-- pairing, it read as a button from some other window dropped into this one.
 local function Face()
     local Theme = PeaversCommons.Theme
     local display = Theme and Theme.Fonts and Theme.Fonts.display
     return display or "Fonts\\FRIZQT__.TTF"
-end
-
--- Button labels only: IBM Plex Mono, which the collection already bundles and
--- already licenses under the OFL.
---
--- Mono is wider per character than the display face, so the fixed button widths
--- in this window are sized against these metrics. Changing this means
--- re-checking them.
-local function ButtonFace()
-    local Theme = PeaversCommons.Theme
-    local mono = Theme and Theme.Fonts and Theme.Fonts.monoRegular
-    return mono or Face()
 end
 
 --- Set a font string's size and alpha in one call.
@@ -421,13 +407,12 @@ function Style.Button(parent, text, opts)
         border:SetColor(color[1], color[2], color[3], variant.border)
     end
 
-    -- Set directly rather than through Style.Text: a button is the one thing in
-    -- this window not drawn in the display face, and re-applying a font on every
-    -- hover is work for nothing when only the colour changes.
+    -- Set directly rather than through Style.Text because re-applying a font on
+    -- every hover is work for nothing: only the colour moves between states.
     local label = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     label:SetPoint("CENTER")
     label:SetText(text)
-    label:SetFont(ButtonFace(), size, "")
+    label:SetFont(Face(), size, "")
     label:SetTextColor(color[1], color[2], color[3], variant.textAlpha)
 
     local function Paint(textAlpha, borderAlpha)

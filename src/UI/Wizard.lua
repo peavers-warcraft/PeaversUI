@@ -54,7 +54,6 @@ local subtitleText   ---@type FontString
 local stepText       ---@type FontString
 local backButton     ---@type Button
 local nextButton     ---@type Button
-local skipButton     ---@type Button
 
 Wizard.stepIndex = 1
 Wizard.choices = nil
@@ -174,13 +173,11 @@ local function BuildFrame()
         variant = "secondary", width = 100,
         onClick = function() Wizard:Back() end,
     })
+    -- There is no third button. "Not now" used to sit here as a bare text link
+    -- beside two bordered ones, which read as something half-drawn rather than
+    -- as a quieter choice. Escape and the close glyph both leave the installer,
+    -- and neither of them has to be styled to be understood.
     backButton:SetPoint("RIGHT", nextButton, "LEFT", -8, 0)
-
-    skipButton = Style.Button(frame, "Not now", {
-        variant = "link", width = 84,
-        onClick = function() Wizard:Hide() end,
-    })
-    skipButton:SetPoint("RIGHT", backButton, "LEFT", -6, 0)
 
     frame:Hide()
 end
@@ -262,8 +259,6 @@ function Wizard:Render()
     subtitleText:SetText(step.subtitle or "")
 
     backButton:SetShown(self.stepIndex > 1 and not step.hideBack)
-    skipButton:SetShown(not step.hideSkip)
-    skipButton:SetLabel(step.skipLabel or "Not now")
     nextButton:SetLabel(step.nextLabel or "Next")
 
     UpdateRail()
@@ -372,7 +367,7 @@ local function BuildPreviewBar()
     undo:SetPoint("RIGHT", -10, 0)
 
     local back = Style.Button(previewBar, "Back to installer", {
-        variant = "primary", width = 152, height = 26,
+        variant = "primary", width = 132, height = 26,
         onClick = function() Wizard:ExitPreview(false) end,
     })
     back:SetPoint("RIGHT", undo, "LEFT", -6, 0)

@@ -424,7 +424,7 @@ Steps.list.layout = {
         ------------------------------------------------------------------------
         local hide = Style.Button(page, "Hide the installer and look", {
             variant = "secondary",
-            width = 240,
+            width = 200,
             onClick = function()
                 PUI.Wizard:EnterPreview(choices.layout)
             end,
@@ -432,10 +432,10 @@ Steps.list.layout = {
         hide:SetPoint("TOPLEFT", 0, y)
 
         status = Style.Label(page, "", Style.Size.value, Style.Alpha.muted, {
-            width = width - 256,
+            width = width - 216,
             wrap = true,
         })
-        status:SetPoint("TOPLEFT", 252, y - 4)
+        status:SetPoint("TOPLEFT", 212, y - 4)
 
         ------------------------------------------------------------------------
         -- Arriving on this screen
@@ -650,7 +650,6 @@ Steps.list.review = {
                         "list is touched - your keybinds, action bars and Edit Mode " ..
                         "layout are left alone."
         self.nextLabel = "Install"
-        self.skipLabel = "Not now"
         self.hideBack = false
 
         local y = Style.Section(page, "Summary", 0, width)
@@ -723,7 +722,6 @@ Steps.list.review = {
         self.subtitle = "Most of it is already on screen. A reload settles the few " ..
                         "settings the game only reads at login."
         self.nextLabel = "Reload UI"
-        self.skipLabel = "Close"
         self.hideBack = true
 
         local y = Style.Section(page, "What happened", 0, width)
