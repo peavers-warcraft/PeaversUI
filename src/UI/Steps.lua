@@ -44,11 +44,9 @@ local Installer = PUI.Installer
 -- for itself. Two numbers, used by every table on every page, so the label
 -- column lines up from the first screen to the last.
 --
--- 152 is comfortable even in IBM Plex Mono, which is appreciably wider per
--- character than a proportional face: the longest module name is "Performance"
--- at eleven characters, needing about 86 of the 130 points this leaves. The
--- blurb column beside it is the one that runs out of room, so spare width goes
--- there rather than here.
+-- The longest module name is "Performance", which sits comfortably inside the
+-- 130 points this leaves. The blurb column beside it is the one that runs out
+-- of room, so spare width belongs there rather than here.
 local LABEL_COL = 152
 local VALUE_COL = 96
 
