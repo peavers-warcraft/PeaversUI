@@ -85,13 +85,14 @@ local function BuildFrame()
         SaveFramePosition()
     end)
 
-    frame:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = 1,
-    })
+    frame:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8" })
     frame:SetBackdropColor(C.bgBase[1], C.bgBase[2], C.bgBase[3], C.bgBase[4])
-    frame:SetBackdropBorderColor(C.border[1], C.border[2], C.border[3], 1)
+
+    -- The edge is four unsnapped textures rather than a backdrop edgeSize; see
+    -- Style.Border for why a one pixel edge does not come out one pixel wide on
+    -- all four sides at this pack's scale.
+    local frameBorder = Style.Border(frame)
+    frameBorder:SetColor(C.border[1], C.border[2], C.border[3], 1)
 
     -- Escape closes it. An installer you cannot dismiss with the key everything
     -- else in the game dismisses with is a trap, not a wizard.
@@ -123,7 +124,11 @@ local function BuildFrame()
 
     -- A text glyph rather than a bordered button: a boxed X in the corner
     -- competes with the two real actions in the footer.
-    local close = Style.Button(frame, "\226\156\149", {
+    --
+    -- A plain ASCII X, not the typographic multiplication sign it started as:
+    -- the game's fonts carry almost nothing outside basic Latin, so the nicer
+    -- glyph drew as blank space and the window had no visible close button.
+    local close = Style.Button(frame, "X", {
         variant = "link", width = 28, height = 28,
         onClick = function() Wizard:Hide() end,
     })
@@ -339,13 +344,11 @@ local function BuildPreviewBar()
     previewBar:SetScript("OnDragStart", function(self) self:StartMoving() end)
     previewBar:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
 
-    previewBar:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = 1,
-    })
+    previewBar:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8" })
     previewBar:SetBackdropColor(C.bgBase[1], C.bgBase[2], C.bgBase[3], 0.97)
-    previewBar:SetBackdropBorderColor(1, 1, 1, Style.Rule.chrome)
+
+    local previewBorder = Style.Border(previewBar)
+    previewBorder:SetColor(1, 1, 1, Style.Rule.chrome)
 
     -- The same accent bar a selected row wears, for the same reason: this strip
     -- exists to say a choice is currently being tried on. Outlining the whole

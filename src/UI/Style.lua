@@ -180,6 +180,55 @@ function Style.Hairline(parent, alpha)
     return line
 end
 
+--- A one-pixel border, drawn as four textures rather than a backdrop edge.
+---
+--- SetBackdrop multiplies its edgeSize by the frame's effective scale, and this
+--- pack pins a fractional one - a 1440 canvas is about 0.53 - so a nominal one
+--- pixel edge rounded up on some sides and down on others: one pixel along the
+--- top and left, two along the bottom and right. Textures can be told not to
+--- snap to the pixel grid, which is the same trick every hairline here uses, so
+--- the border is four of them and comes out even on all four sides.
+function Style.Border(frame)
+    local sides = {}
+    for _, side in ipairs({ "top", "bottom", "left", "right" }) do
+        sides[side] = Thin(frame:CreateTexture(nil, "BORDER"))
+    end
+
+    sides.top:SetPoint("TOPLEFT", 0, 0)
+    sides.top:SetPoint("TOPRIGHT", 0, 0)
+    sides.top:SetHeight(1)
+
+    sides.bottom:SetPoint("BOTTOMLEFT", 0, 0)
+    sides.bottom:SetPoint("BOTTOMRIGHT", 0, 0)
+    sides.bottom:SetHeight(1)
+
+    -- Insets by one so the corners are not painted twice: overlapping alpha at
+    -- four corners is visible as a brighter dot on a dim border.
+    sides.left:SetPoint("TOPLEFT", 0, -1)
+    sides.left:SetPoint("BOTTOMLEFT", 0, 1)
+    sides.left:SetWidth(1)
+
+    sides.right:SetPoint("TOPRIGHT", 0, -1)
+    sides.right:SetPoint("BOTTOMRIGHT", 0, 1)
+    sides.right:SetWidth(1)
+
+    local border = {}
+
+    function border:SetColor(r, g, b, a)
+        for _, texture in pairs(sides) do
+            texture:SetColorTexture(r, g, b, a or 1)
+        end
+    end
+
+    function border:SetShown(shown)
+        for _, texture in pairs(sides) do
+            texture:SetShown(shown)
+        end
+    end
+
+    return border
+end
+
 --------------------------------------------------------------------------------
 -- Sections
 --
@@ -326,17 +375,17 @@ function Style.Button(parent, text, opts)
     local width = opts.width or 110
     local height = opts.height or 28
 
-    local btn = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    local btn = CreateFrame("Button", nil, parent)
     btn:SetSize(width, height)
 
+    local border
     if opts.variant ~= "link" then
-        btn:SetBackdrop({
-            bgFile = "Interface\\Buttons\\WHITE8x8",
-            edgeFile = "Interface\\Buttons\\WHITE8x8",
-            edgeSize = 1,
-        })
-        btn:SetBackdropColor(0, 0, 0, 0.35)
-        btn:SetBackdropBorderColor(unpack(variant.border))
+        local fill = btn:CreateTexture(nil, "BACKGROUND")
+        fill:SetAllPoints()
+        fill:SetColorTexture(0, 0, 0, 0.35)
+
+        border = Style.Border(btn)
+        border:SetColor(unpack(variant.border))
     end
 
     local label = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -346,15 +395,11 @@ function Style.Button(parent, text, opts)
 
     btn:SetScript("OnEnter", function()
         Style.Text(label, Style.Size.value, variant.hoverAlpha, variant.text)
-        if opts.variant ~= "link" then
-            btn:SetBackdropBorderColor(unpack(variant.borderHover))
-        end
+        if border then border:SetColor(unpack(variant.borderHover)) end
     end)
     btn:SetScript("OnLeave", function()
         Style.Text(label, Style.Size.value, variant.textAlpha, variant.text)
-        if opts.variant ~= "link" then
-            btn:SetBackdropBorderColor(unpack(variant.border))
-        end
+        if border then border:SetColor(unpack(variant.border)) end
     end)
     if opts.onClick then btn:SetScript("OnClick", opts.onClick) end
 
@@ -400,6 +445,22 @@ function Style.Checkbox(parent, y, width, opts)
     border:SetPoint("TOPLEFT", box, "TOPLEFT", -1, 1)
     border:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", 1, -1)
 
+    -- A filled box on its own does read as "on", but only once you have worked
+    -- out that it is a checkbox at all, so it wants the tick the rest of the
+    -- collection draws. The collection's own flat mask rather than Blizzard's
+    -- UI-CheckBox-Check, which has bevel, inner shading and a glow baked into
+    -- the art and goes muddy the moment it sits on a flat fill.
+    local check = row:CreateTexture(nil, "OVERLAY")
+    check:SetSize(10, 10)
+    check:SetPoint("CENTER", box, "CENTER", 0, 0)
+    local Theme = PeaversCommons.Theme
+    check:SetTexture(Theme and Theme.Textures and Theme.Textures.check)
+    if not check:GetTexture() then
+        check:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+    end
+    check:SetVertexColor(1, 1, 1)
+    check:Hide()
+
     local label = Style.Label(row, opts.label, Style.Size.label, Style.Alpha.primary)
     label:SetPoint("TOPLEFT", box, "TOPRIGHT", 10, 2)
 
@@ -414,6 +475,7 @@ function Style.Checkbox(parent, y, width, opts)
     row:SetSize(width, height)
 
     local function Paint()
+        check:SetShown(checked)
         if checked then
             box:SetColorTexture(Style.Accent[1], Style.Accent[2], Style.Accent[3], 1)
             border:SetColorTexture(Style.Accent[1], Style.Accent[2], Style.Accent[3], 0.35)
