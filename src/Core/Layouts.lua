@@ -941,6 +941,7 @@ function Layouts:AutoSwitchFor(key)
         end
     end
 
+    ---@type table<string, string|boolean>
     local out = { enabled = plan and plan.enabled and true or false }
     for _, ctxKey in ipairs(keys) do
         out[ctxKey] = plan and plan[ctxKey] or "none"
