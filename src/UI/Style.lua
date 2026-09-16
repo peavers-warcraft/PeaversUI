@@ -346,61 +346,77 @@ end
 --------------------------------------------------------------------------------
 -- Buttons
 --
--- Same dark fill throughout. The primary action is marked by an accent border
--- and an accent label, not by a block of colour: a filled accent button in a
--- window this size reads as a warning rather than as the way forward.
+-- Taken from EllesmereUI's popup action buttons, down to the literal values,
+-- because "roughly that" is what produced the version this replaces.
+--
+-- The button is a SOLID dark panel - not a translucent one. That is the whole
+-- difference: at 35% black the window showed through and the thing read as a
+-- faint outline someone had drawn on the background rather than as an object
+-- sitting on top of it, which is what made a set of correct borders and correct
+-- type still look wrong.
+--
+-- Emphasis is the accent on the outline and the label, never as a fill. Both
+-- variants share one background, so the eye separates them by colour and alpha
+-- alone, and the fill does not move on hover - only the border and the text do.
 --------------------------------------------------------------------------------
+
+-- Near-black navy at 92%, the same on every button in every state.
+local BUTTON_FILL = { 0.06, 0.08, 0.10, 0.92 }
+local BUTTON_HEIGHT = 32
 
 local VARIANTS = {
     primary = {
-        border = { Style.Accent[1], Style.Accent[2], Style.Accent[3], 0.90 },
-        borderHover = { Style.Accent[1], Style.Accent[2], Style.Accent[3], 1.00 },
-        text = Style.Accent, textAlpha = 1.00, hoverAlpha = 1.00,
+        color = Style.Accent,
+        border = 0.90, borderHover = 1.00,
+        textAlpha = 0.90, hoverAlpha = 1.00,
     },
     secondary = {
-        border = { 1, 1, 1, 0.30 }, borderHover = { 1, 1, 1, 0.45 },
-        text = { 1, 1, 1 }, textAlpha = 0.55, hoverAlpha = 0.80,
+        color = { 1, 1, 1 },
+        border = 0.35, borderHover = 0.60,
+        textAlpha = 0.55, hoverAlpha = 1.00,
     },
-    -- A text link rather than a button: for the way out of a screen, which
-    -- should be available without competing with the way on.
+    -- A text link rather than a button: no fill and no border at all, for the
+    -- way out of a screen, which should be available without competing with the
+    -- way on. No `border` is what marks it as one.
     link = {
-        border = { 0, 0, 0, 0 }, borderHover = { 0, 0, 0, 0 },
-        text = { 1, 1, 1 }, textAlpha = 0.45, hoverAlpha = 0.80,
+        color = { 1, 1, 1 },
+        textAlpha = 0.50, hoverAlpha = 1.00,
     },
 }
 
 function Style.Button(parent, text, opts)
     opts = opts or {}
     local variant = VARIANTS[opts.variant or "secondary"] or VARIANTS.secondary
-    local width = opts.width or 110
-    local height = opts.height or 28
+    local size = opts.size or Style.Size.label
+    local color = variant.color
 
     local btn = CreateFrame("Button", nil, parent)
-    btn:SetSize(width, height)
+    btn:SetSize(opts.width or 110, opts.height or BUTTON_HEIGHT)
 
     local border
-    if opts.variant ~= "link" then
+    if variant.border then
         local fill = btn:CreateTexture(nil, "BACKGROUND")
         fill:SetAllPoints()
-        fill:SetColorTexture(0, 0, 0, 0.35)
+        fill:SetColorTexture(unpack(BUTTON_FILL))
 
         border = Style.Border(btn)
-        border:SetColor(unpack(variant.border))
+        border:SetColor(color[1], color[2], color[3], variant.border)
     end
 
     local label = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     label:SetPoint("CENTER")
     label:SetText(text)
-    Style.Text(label, Style.Size.value, variant.textAlpha, variant.text)
+    Style.Text(label, size, variant.textAlpha, color)
 
-    btn:SetScript("OnEnter", function()
-        Style.Text(label, Style.Size.value, variant.hoverAlpha, variant.text)
-        if border then border:SetColor(unpack(variant.borderHover)) end
-    end)
-    btn:SetScript("OnLeave", function()
-        Style.Text(label, Style.Size.value, variant.textAlpha, variant.text)
-        if border then border:SetColor(unpack(variant.border)) end
-    end)
+    local function Paint(textAlpha, borderAlpha)
+        Style.Text(label, size, textAlpha, color)
+        if border then
+            border:SetColor(color[1], color[2], color[3], borderAlpha)
+        end
+    end
+
+    btn:SetScript("OnEnter", function() Paint(variant.hoverAlpha, variant.borderHover) end)
+    btn:SetScript("OnLeave", function() Paint(variant.textAlpha, variant.border) end)
     if opts.onClick then btn:SetScript("OnClick", opts.onClick) end
 
     function btn:SetLabel(value)

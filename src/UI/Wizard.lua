@@ -38,7 +38,10 @@ local FRAME_WIDTH = 760
 -- module; still inside the 768-unit screen of an unscaled UI.
 local FRAME_HEIGHT = 640
 local CONTENT_INSET = Style.Pad.content
-local FOOTER_HEIGHT = 52
+-- Room for a 32px button with air above and below it. The buttons this window
+-- borrows from stand 38 tall in a popup with nothing else in it; a footer wants
+-- the shorter one.
+local FOOTER_HEIGHT = 58
 -- Room for a three-line subtitle. At 76 the second line of every longer subtitle
 -- ran through the header rule and into the page underneath it, and the hero
 -- title sits lower than the old eyebrow-and-title pair did.
@@ -159,16 +162,16 @@ local function BuildFrame()
     -- that said the same thing less clearly, in the accent, which belongs to
     -- selection and the primary action alone.
     stepText = Style.Label(frame, "", Style.Size.section, Style.Alpha.muted)
-    stepText:SetPoint("BOTTOMLEFT", CONTENT_INSET, 20)
+    stepText:SetPoint("BOTTOMLEFT", CONTENT_INSET, 24)
 
     nextButton = Style.Button(frame, "Next", {
-        variant = "primary", width = 110,
+        variant = "primary", width = 120,
         onClick = function() Wizard:Next() end,
     })
-    nextButton:SetPoint("BOTTOMRIGHT", -CONTENT_INSET, 12)
+    nextButton:SetPoint("BOTTOMRIGHT", -CONTENT_INSET, 13)
 
     backButton = Style.Button(frame, "Back", {
-        variant = "secondary", width = 92,
+        variant = "secondary", width = 100,
         onClick = function() Wizard:Back() end,
     })
     backButton:SetPoint("RIGHT", nextButton, "LEFT", -8, 0)
@@ -363,13 +366,13 @@ local function BuildPreviewBar()
     previewBar.label:SetPoint("LEFT", Style.Row.inset, 0)
 
     local undo = Style.Button(previewBar, "Undo", {
-        variant = "link", width = 56, height = 24,
+        variant = "link", width = 56, height = 26,
         onClick = function() Wizard:ExitPreview(true) end,
     })
     undo:SetPoint("RIGHT", -10, 0)
 
     local back = Style.Button(previewBar, "Back to installer", {
-        variant = "primary", width = 132, height = 24,
+        variant = "primary", width = 132, height = 26,
         onClick = function() Wizard:ExitPreview(false) end,
     })
     back:SetPoint("RIGHT", undo, "LEFT", -6, 0)
