@@ -12,7 +12,7 @@
 -- found. That is the difference between an installer and a settings panel, and
 -- it is the reason the review page can promise anything at all.
 --
--- Every page here is drawn out of src/UI/Style.lua and holds no numbers of its
+-- Every page here is drawn out of PeaversCommons' Style and holds no numbers of its
 -- own. Lists are flush banded rows rather than floating cards with gaps between
 -- them, headings are sections rather than panels, and the accent appears exactly
 -- twice on any screen: on the row you have chosen, and on the button that moves
@@ -27,7 +27,7 @@ PUI.Steps = Steps
 local PeaversCommons = _G.PeaversCommons
 local W = PeaversCommons.Widgets
 local C = W.Colors
-local Style = PUI.Style
+local Style = PeaversCommons.Style
 
 local Modules = PUI.Modules
 local Layouts = PUI.Layouts

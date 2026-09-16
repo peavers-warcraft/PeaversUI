@@ -27,8 +27,11 @@ local W = PeaversCommons.Widgets
 local C = W.Colors
 
 -- Every number this window is drawn with lives in Style, and nothing here
--- restates one. See src/UI/Style.lua for the system and why it is that system.
-local Style = PUI.Style
+-- restates one. The system, and why it is that system, is documented in
+-- PeaversCommons/src/UI/Style.lua: it is shared with PeaversConfig and with
+-- anything else in the collection that draws a settings surface, rather than
+-- being a second copy kept here.
+local Style = PeaversCommons.Style
 
 -- Wide enough for the graphics screen, which is the only two-column page and
 -- therefore the one that sets the floor: a preset card and a context dropdown
