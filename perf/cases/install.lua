@@ -1852,6 +1852,25 @@ for _, ctx in ipairs(Installer:AutoSwitchContexts()) do
     assert(ctx.key ~= "mythicplus", "the Anniversary fallback must not offer a timed-dungeon context")
 end
 
+-- WoW Forever. Both of DetectClient's ladders get this wrong on their own: the
+-- client reports WOW_PROJECT_ID as mainline, and it shares major version 1 with
+-- Classic Era. Vanilla content, so no timed dungeons and no retail-only
+-- recommendations - but a modern client underneath.
+AsClient(16001, realContexts)
+assert(Modules.client.key == "forever", "16001 should read as WoW Forever, got " .. tostring(Modules.client.key))
+assert(Modules.client.isRetail == false, "Forever must not read as retail")
+assert(Modules.client.isForever == true, "Forever should set isForever")
+assert(Modules.client.isModernClient == true, "Forever is retail-generation underneath")
+for _, ctx in ipairs(Installer:AutoSwitchContexts()) do
+    assert(ctx.key ~= "mythicplus", "the Forever fallback must not offer a timed-dungeon context")
+end
+assert(Extras:ForClient({ clients = { retail = true } }) == false,
+    "a retail-only recommendation must not be offered on Forever")
+assert(Extras:ForClient({}) == true,
+    "an ungated recommendation is offered on Forever like anywhere else")
+assert(not Installer:InstancePhrase():find("key", 1, true),
+    "Forever wording must not mention keys")
+
 registry.GetAddon = realGetAddon
 _G.PeaversPerformance = realPerformance
 

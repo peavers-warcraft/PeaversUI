@@ -49,8 +49,11 @@
 -- CLIENTS
 --
 -- `clients` names the game clients an entry is offered on, by the keys in
--- Modules.client ("retail", "era", "anniversary", "mists"); absent means all of
--- them. Recommending an addon that does not exist for the client somebody is
+-- Modules.client ("retail", "forever", "era", "anniversary", "mists"); absent
+-- means all of them. Note that RETAIL_ONLY excludes Forever, which is the right
+-- default: those entries are built around Mythic+ and the Cooldown Manager, and
+-- Forever has neither - it ships the Cooldown Manager's code with the feature
+-- switched off. Recommending an addon that does not exist for the client somebody is
 -- playing sends them looking for something that is not there.
 --------------------------------------------------------------------------------
 
@@ -61,7 +64,8 @@ PUI.Extras = Extras
 
 local CURSE = "https://www.curseforge.com/wow/addons/"
 
-Extras.clientKeys = { retail = true, era = true, anniversary = true, mists = true, classic = true }
+Extras.clientKeys = { retail = true, forever = true, era = true, anniversary = true,
+    mists = true, classic = true }
 
 -- Built around retail-only systems: the Cooldown Manager and Mythic+.
 local RETAIL_ONLY = { retail = true }

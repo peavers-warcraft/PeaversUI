@@ -1,4 +1,4 @@
-## Interface: 11509, 20506, 50504, 120001, 120005, 120007, 120100
+## Interface: 11509, 16001, 20506, 50504, 120001, 120005, 120007, 120100
 
 ## Title: |cff3abdf7Peavers|rUI
 ## Notes: The Peavers UI pack - an installer that sets up the whole suite in one pass

@@ -400,7 +400,7 @@ end
 --------------------------------------------------------------------------------
 -- Which client
 --
--- The pack runs on retail and on the Classic clients. Nearly everything that
+-- The pack runs on retail, on WoW Forever and on the Classic clients. Nearly everything that
 -- differs between them is the modules' business; the pack only needs to know
 -- which content exists - keys, Challenge Modes, neither - and which recommended
 -- addons make sense. PeaversCommons.Compat answers when it is there, the
@@ -416,7 +416,13 @@ function Modules:DetectClient()
     interface = interface or 0
 
     local key = "retail"
-    if compat and compat.isClassicEra ~= nil then
+    -- Forever is tested first and from the interface number alone, because both
+    -- of the ladders below get it wrong: it reports WOW_PROJECT_ID equal to
+    -- WOW_PROJECT_MAINLINE, so Compat's flags call it retail, and it continues the
+    -- vanilla 1.x line, so the interface ranges call it Classic Era.
+    if interface >= 16000 and interface < 20000 then
+        key = "forever"
+    elseif compat and compat.isClassicEra ~= nil then
         key = (compat.isClassicEra and "era") or (compat.isAnniversary and "anniversary")
             or (compat.isMists and "mists") or (compat.isClassic and "classic") or "retail"
     elseif interface > 0 and interface < 20000 then
@@ -429,7 +435,13 @@ function Modules:DetectClient()
         key = "classic"
     end
 
-    self.client = { key = key, interface = interface, isRetail = key == "retail" }
+    -- isModernClient is the client's generation, isRetail the game. Forever is
+    -- built from retail's branch - the modern tooltip, aura and minimap APIs are
+    -- all there - while its content is vanilla, so the two answers differ there
+    -- and nowhere else.
+    self.client = { key = key, interface = interface, isRetail = key == "retail",
+        isForever = key == "forever",
+        isModernClient = key == "retail" or key == "forever" }
     return self.client
 end
 
