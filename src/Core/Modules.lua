@@ -400,48 +400,40 @@ end
 --------------------------------------------------------------------------------
 -- Which client
 --
--- The pack runs on retail, on WoW Forever and on the Classic clients. Nearly everything that
--- differs between them is the modules' business; the pack only needs to know
--- which content exists - keys, Challenge Modes, neither - and which recommended
--- addons make sense. PeaversCommons.Compat answers when it is there, the
--- interface number otherwise, and anything unrecognised reads as retail so an
--- unfamiliar client keeps today's behaviour rather than losing some of it.
+-- The pack runs on retail, on WoW Forever and on the Classic clients. Nearly
+-- everything that differs between them is the modules' business; the pack only
+-- needs to know which content exists - keys, Challenge Modes, neither - and which
+-- recommended addons make sense.
+--
+-- All of it comes from PeaversCommons.Client, the only thing in the collection
+-- that works out which game this is. The pack used to derive it again here, from
+-- Compat when present and the interface number otherwise, and those two answers
+-- disagreed about Forever. An unrecognised client reads as retail in Commons, so
+-- an unfamiliar one still keeps today's behaviour; an out-of-date Commons gets no
+-- answer at all rather than a guessed one.
 --------------------------------------------------------------------------------
 function Modules:DetectClient()
-    local compat = _G.PeaversCommons and _G.PeaversCommons.Compat
-    local interface = compat and compat.interface
-    if not interface and type(GetBuildInfo) == "function" then
-        interface = tonumber((select(4, GetBuildInfo())))
-    end
-    interface = interface or 0
+    local shared = _G.PeaversCommons and _G.PeaversCommons.Require
+        and _G.PeaversCommons:Require(4, "PeaversUI") and _G.PeaversCommons.Client
 
-    local key = "retail"
-    -- Forever is tested first and from the interface number alone, because both
-    -- of the ladders below get it wrong: it reports WOW_PROJECT_ID equal to
-    -- WOW_PROJECT_MAINLINE, so Compat's flags call it retail, and it continues the
-    -- vanilla 1.x line, so the interface ranges call it Classic Era.
-    if interface >= 16000 and interface < 20000 then
-        key = "forever"
-    elseif compat and compat.isClassicEra ~= nil then
-        key = (compat.isClassicEra and "era") or (compat.isAnniversary and "anniversary")
-            or (compat.isMists and "mists") or (compat.isClassic and "classic") or "retail"
-    elseif interface > 0 and interface < 20000 then
-        key = "era"
-    elseif interface >= 20000 and interface < 30000 then
-        key = "anniversary"
-    elseif interface >= 50000 and interface < 60000 then
-        key = "mists"
-    elseif interface > 0 and interface < 100000 then
-        key = "classic"
+    if not shared then
+        -- No facts rather than guessed ones. Commons has already said its line
+        -- about updating; the pack refuses to install against an unknown client
+        -- instead of laying out a retail layout on whatever this is.
+        self.client = nil
+        self.clientUnsupported = true
+        return nil
     end
 
-    -- isModernClient is the client's generation, isRetail the game. Forever is
-    -- built from retail's branch - the modern tooltip, aura and minimap APIs are
-    -- all there - while its content is vanilla, so the two answers differ there
-    -- and nowhere else.
-    self.client = { key = key, interface = interface, isRetail = key == "retail",
-        isForever = key == "forever",
-        isModernClient = key == "retail" or key == "forever" }
+    self.clientUnsupported = nil
+    self.client = {
+        key = shared.key,
+        label = shared.label,
+        interface = shared.interface,
+        isRetail = shared.isRetail,
+        isForever = shared.isForever,
+        isModernClient = shared.isModernClient,
+    }
     return self.client
 end
 

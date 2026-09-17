@@ -112,6 +112,8 @@ end
 local registered = {}
 
 _G.PeaversCommons = {
+    revision = 4,
+    Require = function(self, revision) return (self.revision or 0) >= revision end,
     ConfigManager = {
         New = function(_, addon, defaults, options)
             local config = DeepCopy(defaults or {})
@@ -1780,8 +1782,31 @@ assert(reachable == offered,
 local realGetBuildInfo = _G.GetBuildInfo
 local realContexts = PPERF.AutoSwitch.contexts
 
+-- What PeaversCommons.Client publishes for each client. Explicit fixtures rather
+-- than a copy of the derivation: working out which game this is belongs to
+-- Commons now, and is tested there (PeaversCommons tests/client.lua). What this
+-- case checks is that the pack reads it and words itself accordingly.
+local CLIENTS = {
+    [120100] = { key = "retail", label = "World of Warcraft",
+        isRetail = true, isForever = false, isModernClient = true },
+    [16001] = { key = "forever", label = "WoW Forever",
+        isRetail = false, isForever = true, isModernClient = true },
+    [11509] = { key = "era", label = "Classic Era",
+        isRetail = false, isForever = false, isModernClient = false },
+    [20506] = { key = "anniversary", label = "Anniversary",
+        isRetail = false, isForever = false, isModernClient = false },
+    [50504] = { key = "mists", label = "Mists of Pandaria Classic",
+        isRetail = false, isForever = false, isModernClient = false },
+}
+
 local function AsClient(interface, contexts)
+    local fixture = assert(CLIENTS[interface], "no client fixture for " .. tostring(interface))
     _G.GetBuildInfo = function() return "0.0.0", "1", "", interface end
+    _G.PeaversCommons.Client = {
+        key = fixture.key, label = fixture.label, interface = interface,
+        isRetail = fixture.isRetail, isForever = fixture.isForever,
+        isModernClient = fixture.isModernClient,
+    }
     Modules:DetectClient()
     PPERF.AutoSwitch.contexts = contexts
 end
@@ -1874,19 +1899,28 @@ assert(not Installer:InstancePhrase():find("key", 1, true),
 registry.GetAddon = realGetAddon
 _G.PeaversPerformance = realPerformance
 
--- PeaversCommons.Compat, where present, wins over the build number.
-_G.PeaversCommons.Compat = { interface = 50504, isClassic = true,
-    isClassicEra = false, isAnniversary = false, isMists = true }
-_G.GetBuildInfo = function() return "0.0.0", "1", "", 11509 end
+-- An out-of-date PeaversCommons - one without Require, or one whose revision is
+-- below what the pack needs - yields no client at all rather than a guess. The
+-- pack would rather install nothing than lay a retail layout over an unknown game.
+local realRequire = _G.PeaversCommons.Require
+_G.PeaversCommons.Require = nil
 Modules:DetectClient()
-assert(Modules.client.key == "mists", "Compat should decide the client when it is there")
-_G.PeaversCommons.Compat = nil
+assert(Modules.client == nil, "no Require means no client facts")
+assert(Modules.clientUnsupported == true, "and the pack should know it is unsupported")
 
--- Back to retail for everything below.
-_G.GetBuildInfo = realGetBuildInfo
-PPERF.AutoSwitch.contexts = realContexts
+_G.PeaversCommons.Require = function() return false end
 Modules:DetectClient()
+assert(Modules.client == nil, "an older revision must not be guessed around")
+assert(Modules.clientUnsupported == true, "and it is still unsupported")
+_G.PeaversCommons.Require = realRequire
+
+-- Back to retail for everything below. Through AsClient, because the client now
+-- comes from PeaversCommons.Client and restoring GetBuildInfo alone would leave
+-- whichever client ran last in place.
+AsClient(120100, realContexts)
+_G.GetBuildInfo = realGetBuildInfo
 assert(Modules.client.key == "retail", "the fixture should read as retail again")
+assert(Modules.clientUnsupported ~= true, "and it should be supported again")
 
 --------------------------------------------------------------------------------
 -- Capturing profiles from third-party addons
