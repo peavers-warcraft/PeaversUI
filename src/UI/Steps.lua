@@ -942,16 +942,16 @@ Steps.list.review = {
 
         y = y - Style.Pad.gap
 
-        local previewNote = PUI.Preview:IsActive()
-            and "The layout you previewed is on screen now; installing keeps it. "
-            or ""
-
+        -- One line, not four. The page it sits at the bottom of is the longest in
+        -- the installer, and most of what this used to say - that the pack only
+        -- ever writes ordinary settings, and where to change them - is said
+        -- again, with room to say it properly, on the screen after this one.
         local note = Paragraph(page,
-            previewNote ..
-            "Everything written here lands in each module's own saved settings, " ..
-            "which are the same ones Edit Mode edits - so anything the pack sets " ..
-            "can be changed there afterwards. Run the installer again from /pui " ..
-            "at any time to start over.", width)
+            (PUI.Preview:IsActive()
+                and "The layout you previewed is on screen now; installing keeps it. "
+                or "") ..
+            "Everything here lands in the modules' own settings, and /pui starts over.",
+            width)
         note:SetPoint("TOPLEFT", 0, y)
     end,
 
