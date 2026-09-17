@@ -34,6 +34,13 @@ local PUI_DEFAULTS = {
     layout = "peavers",
     graphicsPreset = "none",
 
+    -- How the bars are painted, from the installer's bars screen. Kept apart
+    -- from the layout because they are independent questions: any colour goes
+    -- with any arrangement. nil for either means "whatever the layout says" and
+    -- "the collection's own texture" respectively.
+    barColour = nil,
+    barTexture = nil,
+
     -- The canvas height, in UI units, the layout was drawn for - the installer's
     -- interface size question. nil means never asked, which everything reads as
     -- Layouts.CANVAS_HEIGHT: an install made before sizes existed is at the size
@@ -113,6 +120,14 @@ function PUI.Config:MarkInstalled(choices)
         self.layout = choices.layout or self.layout
         self.graphicsPreset = choices.graphicsPreset or self.graphicsPreset
         self.canvas = tonumber(choices.canvas) or self.canvas
+
+        if choices.style then
+            self.barColour = choices.style.colour or self.barColour
+            -- Assigned rather than or-ed: nil is a real answer here, meaning the
+            -- collection's own texture, and has to be able to replace a path the
+            -- player set on a previous run.
+            self.barTexture = choices.style.texture
+        end
 
         local layout = PUI.Layouts and PUI.Layouts:Get(self.layout)
         self.layoutRevision = layout and layout.revision or nil

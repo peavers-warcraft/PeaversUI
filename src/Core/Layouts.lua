@@ -211,6 +211,92 @@ local HOUSE_TOOLTIP = {
         hideInCombat = "never",
 }
 
+--------------------------------------------------------------------------------
+-- Bar styling, asked once rather than decided by the layout
+--
+-- Whether a health bar carries the class colour or a flat one has nothing to do
+-- with where the frames sit, and the layouts were quietly deciding both. That
+-- made "I want Peavers UI but I can see class colours" an unanswerable request,
+-- when it is really two independent questions with two independent answers.
+--
+-- So the layouts still state a colour - it is part of what each one looks like,
+-- and the installer preselects it - but the choice is the player's, on a screen
+-- of its own, and it is applied over whichever layout they picked.
+--
+-- The texture is the same idea and a longer list, because PeaversCommons
+-- aggregates what the client has: its own two fills, Blizzard's, and anything
+-- LibSharedMedia or Details has registered. None of it is named in a layout,
+-- which is the media rule at the top of this file - a layout that shipped a path
+-- into somebody else's addon would draw as nothing for everyone without it.
+-- Picking one for yourself is different, and ConfigManager resolves a path that
+-- has gone missing back to the default rather than leaving an invisible bar.
+--------------------------------------------------------------------------------
+
+Layouts.FLAT_BAR = { r = 0, g = 0, b = 0 }
+
+Layouts.colours = {
+    {
+        key = "class",
+        label = "Class colours",
+        blurb = "Health bars carry the class of whoever is in them, the way the " ..
+                "game does. Tells you what you are fighting before you read a name.",
+    },
+    {
+        key = "flat",
+        label = "Flat black",
+        blurb = "One colour for every bar, so the only thing it tells you is how " ..
+                "full it is. Quieter, and what the pack's own layout was built with.",
+    },
+}
+
+--- The colour a layout states for itself, as a key from Layouts.colours. What the
+--- bars screen preselects, until somebody chooses otherwise.
+function Layouts:ColourOf(key)
+    local layout = self:Get(key)
+    local units = layout and layout.overrides and layout.overrides.unitframes
+        and layout.overrides.unitframes.units
+    local player = units and units.player
+    return (player and player.healthColorMode == "custom") and "flat" or "class"
+end
+
+--- Write a bar style over a resolved set of overrides, in place.
+---
+--- Applied after the layout rather than merged into it so that the answer is the
+--- player's last word: a layout states a colour, this overrules it, and the two
+--- never have to agree.
+---
+--- @param overrides table  from Layouts:OverridesFor
+--- @param style table|nil  { colour = "class"|"flat"|nil, texture = string|nil }
+function Layouts:ApplyStyle(overrides, style)
+    if type(style) ~= "table" or type(overrides) ~= "table" then return end
+
+    local units = overrides.unitframes and overrides.unitframes.units
+    if units then
+        for _, unit in pairs(units) do
+            if type(unit) == "table" then
+                if style.colour == "class" then
+                    unit.healthColorMode = "class"
+                elseif style.colour == "flat" then
+                    unit.healthColorMode = "custom"
+                    -- A fresh table per unit: these land in another addon's saved
+                    -- variables, and four frames sharing one colour table is how
+                    -- recolouring one recolours all of them.
+                    unit.healthColor = { r = self.FLAT_BAR.r, g = self.FLAT_BAR.g, b = self.FLAT_BAR.b }
+                end
+
+                if style.texture then unit.barTexture = style.texture end
+            end
+        end
+    end
+
+    -- Everything else that draws a bar takes the texture at the top level, which
+    -- is where PeaversCommons' own appearance sync writes it too.
+    if style.texture then
+        if overrides.castbar then overrides.castbar.barTexture = style.texture end
+        if overrides.systembars then overrides.systembars.barTexture = style.texture end
+    end
+end
+
 Layouts.list = {
 
     ----------------------------------------------------------------------------
@@ -534,11 +620,11 @@ Layouts.list = {
             },
             minimap = {
                 enabled = true,
-                -- The one layout that keeps the circle. Squaring it is the
-                -- single most obvious sign that an addon has been at the
-                -- interface, and this is the layout for somebody who would
-                -- rather it did not look like one.
-                squareShape = false,
+                -- Square, like every other layout. Traditional is about where
+                -- the unit frames sit, not about undoing the pack: somebody who
+                -- installed a UI pack wants the tidier minimap, and the round
+                -- one is a click away in PeaversMiniMap's own settings.
+                squareShape = true,
                 size = 170,
                 scale = 1,
                 borderSize = 0,

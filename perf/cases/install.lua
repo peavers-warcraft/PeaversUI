@@ -792,6 +792,57 @@ assert(centred.unitframes.units.player.x == -310,
     "a centre-placed layout must not be touched by edge resolution")
 
 --------------------------------------------------------------------------------
+-- Bar style, applied over whichever layout was picked
+--
+-- Colour and texture are independent of the arrangement, so the assertions are
+-- about that independence: a layout states a colour, the style overrules it, and
+-- the combination nobody could previously ask for - Peavers UI with class
+-- colours - has to come out with the frames where Peavers UI puts them and the
+-- bars class-coloured.
+--------------------------------------------------------------------------------
+
+assert(Layouts:ColourOf("peavers") == "flat", "Peavers UI paints its bars flat")
+assert(Layouts:ColourOf("traditional") == "class", "Traditional uses class colours")
+assert(Layouts:ColourOf("modern") == "class", "Modern uses class colours")
+
+local classy = Installer:OverridesForLayout("peavers", nil, { colour = "class" })
+assert(classy.unitframes.units.player.healthColorMode == "class",
+    "a class-coloured style must overrule the layout's flat bars")
+assert(classy.unitframes.units.player.y == -395,
+    "changing the bar colour must not move anything")
+
+local flattened = Installer:OverridesForLayout("traditional", nil, { colour = "flat" })
+local flatPlayer = flattened.unitframes.units.player
+assert(flatPlayer.healthColorMode == "custom"
+    and flatPlayer.healthColor.r == 0 and flatPlayer.healthColor.g == 0
+    and flatPlayer.healthColor.b == 0,
+    "a flat style must paint the bars black whatever the layout said")
+
+-- Each frame gets a colour table of its own. Four frames sharing one table is
+-- how recolouring the player recolours the target as well.
+assert(flatPlayer.healthColor ~= flattened.unitframes.units.target.healthColor,
+    "every frame needs its own colour table, not a shared reference")
+
+-- The texture reaches the unit frames and everything else that draws a bar.
+local textured = Installer:OverridesForLayout("modern", nil,
+    { colour = "class", texture = "Interface\\Buttons\\WHITE8x8" })
+assert(textured.unitframes.units.player.barTexture == "Interface\\Buttons\\WHITE8x8",
+    "a chosen texture must reach the unit frames")
+assert(textured.castbar.barTexture == "Interface\\Buttons\\WHITE8x8",
+    "a chosen texture must reach the cast bars")
+assert(textured.systembars.barTexture == "Interface\\Buttons\\WHITE8x8",
+    "a chosen texture must reach the system bars")
+
+-- No texture chosen leaves the key alone entirely, which is what lets every
+-- module fall back to the collection's own fill. Writing a path here would be
+-- the media rule at the top of Layouts.lua broken from the other end.
+local untextured = Installer:OverridesForLayout("modern", nil, { colour = "class" })
+assert(untextured.unitframes.units.player.barTexture == nil,
+    "with no texture chosen the pack must not name one")
+assert(untextured.systembars.barTexture == nil,
+    "with no texture chosen the system bars must not be given one")
+
+--------------------------------------------------------------------------------
 -- Layouts that no longer exist
 --
 -- Compact, Cinematic and Raid were retired, and their keys are still sitting in
@@ -1243,6 +1294,46 @@ assert(PUI.Config.canvas == 1080, "the installed interface size was not recorded
 assert(Installer:NewChoices("peavers").canvas == 1080,
     "a fresh set of choices should start from the size this account is installed at")
 PUI.Config.canvas = nil
+
+--------------------------------------------------------------------------------
+-- Installing with a bar style
+--
+-- The pure arithmetic is checked further up; this is the whole way through, into
+-- the module configs and back out of the account on the next run.
+--------------------------------------------------------------------------------
+
+local styled = Installer:NewChoices("peavers")
+styled.graphicsPreset = "none"
+styled.autoSwitch = nil
+styled.style = { colour = "class", texture = "Interface\\Buttons\\WHITE8x8" }
+Installer:Apply(styled)
+
+assert(PUF.Config.units.player.healthColorMode == "class",
+    "the chosen colour did not reach the module")
+assert(PUF.Config.units.player.barTexture == "Interface\\Buttons\\WHITE8x8",
+    "the chosen texture did not reach the module")
+assert(PUF.Config.units.player.y == -395,
+    "restyling the bars must not move the frames")
+assert(PUI.Config.barColour == "class"
+    and PUI.Config.barTexture == "Interface\\Buttons\\WHITE8x8",
+    "the bar style was not recorded")
+
+-- It comes back out of the account the next time choices are built, so a re-run
+-- starts on the style somebody already chose rather than back at the layout's.
+assert(Installer:NewChoices("peavers").style.colour == "class",
+    "a fresh set of choices should start from the style this account holds")
+
+-- nil is a real answer, meaning the collection's own texture, and has to be able
+-- to replace a path recorded on an earlier run.
+local unstyled = Installer:NewChoices("peavers")
+unstyled.graphicsPreset = "none"
+unstyled.autoSwitch = nil
+unstyled.style = { colour = "flat", texture = nil }
+Installer:Apply(unstyled)
+assert(PUI.Config.barTexture == nil,
+    "choosing the collection's own texture must clear a path set before")
+
+PUI.Config.barColour, PUI.Config.barTexture = nil, nil
 
 -- Switching a module off must not wipe it. Turning something off means stop
 -- drawing it, not throw away how it was set up.

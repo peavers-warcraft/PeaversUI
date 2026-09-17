@@ -70,9 +70,19 @@ Installer.DeepMerge = DeepMerge
 -- a snapshot against unscaled positions and hand back an undo that put the
 -- frames somewhere they had never been.
 --------------------------------------------------------------------------------
+--- The layout drawn for a canvas and painted in a bar style. The one place the
+--- three are put together, so an install, a summary and a preview's snapshot
+--- cannot disagree about any of them.
+function Installer:OverridesForLayout(layoutKey, canvas, style)
+    local overrides = Layouts:OverridesFor(layoutKey, canvas)
+    Layouts:ApplyStyle(overrides, style)
+    return overrides
+end
+
 function Installer:OverridesFor(choices)
     if not choices or choices.layout == Layouts.CURRENT then return {} end
-    return Layouts:OverridesFor(choices.layout, choices.canvas)
+    return self:OverridesForLayout(Layouts:Resolve(choices.layout) or Layouts.DEFAULT,
+        choices.canvas, choices.style)
 end
 
 --------------------------------------------------------------------------------
@@ -119,6 +129,15 @@ function Installer:NewChoices(layoutKey)
         -- first install. The wizard is the only caller that pre-selects the
         -- suggestion, and only when nothing has ever been installed.
         canvas = tonumber(PUI.Config and PUI.Config.canvas) or Layouts.CANVAS_HEIGHT,
+        -- How the bars are painted. The colour starts as the one this layout
+        -- states for itself and follows a change of layout until somebody
+        -- answers the bars screen by hand; the texture starts as whatever the
+        -- account already holds, nil meaning the collection's own.
+        style = {
+            colour = (PUI.Config and PUI.Config.barColour) or Layouts:ColourOf(key),
+            texture = PUI.Config and PUI.Config.barTexture or nil,
+        },
+        styleTouched = false,
         -- Put each module back to its own defaults before the layout goes on.
         --
         -- On by default, because the thing people mean by "run the installer
@@ -233,6 +252,30 @@ function Installer:Preview(choices)
         lines[#lines + 1] = { label = "Interface size", detail = detail, ok = ok or false }
     end
 
+    -- How the bars are painted, when a layout is going on to paint them.
+    if choices.layout ~= Layouts.CURRENT and choices.style then
+        local colour = choices.style.colour == "flat" and "flat black" or "class colours"
+        local texture = choices.style.texture
+
+        -- Named where the collection can name it, and left unnamed rather than
+        -- printed as a file path where it cannot: a texture somebody picked from
+        -- Details reads as "Details Flat", not as Interface\AddOns\Details\...
+        local name
+        if texture then
+            local commons = _G.PeaversCommons
+            local manager = commons and commons.ConfigManager
+            local list = manager and manager.GetBarTextures and manager.GetBarTextures() or {}
+            name = list[texture]
+        end
+
+        lines[#lines + 1] = {
+            label = "Bars",
+            detail = colour .. ", " .. (name and ("the " .. name .. " texture")
+                or "the collection's own texture"),
+            ok = true,
+        }
+    end
+
     local performance = Modules.byKey.performance
     local available = Modules:IsAvailable(performance)
     local preset = choices.graphicsPreset
@@ -316,8 +359,10 @@ function Installer:Apply(choices)
     -- no override is written, whatever the reset box says.
     local keepCurrent = choices.layout == Layouts.CURRENT
     local layoutKey = not keepCurrent and (Layouts:Resolve(choices.layout) or Layouts.DEFAULT) or nil
-    -- Drawn for the chosen interface size, not as shipped. See Layouts:OverridesFor.
-    local overrides = layoutKey and Layouts:OverridesFor(layoutKey, choices.canvas) or {}
+    -- Drawn for the chosen interface size and painted in the chosen bar style,
+    -- not as shipped. See Layouts:OverridesFor and Layouts:ApplyStyle.
+    local overrides = layoutKey
+        and self:OverridesForLayout(layoutKey, choices.canvas, choices.style) or {}
 
     -- Drain anything left over from an earlier run so the report only ever
     -- describes this one.

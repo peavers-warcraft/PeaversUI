@@ -1,10 +1,11 @@
 --------------------------------------------------------------------------------
 -- PeaversUI wizard steps
 --
--- Six pages, in order: what you have, what you want, how it should look, how big
--- it should be, what to do about graphics, and a summary you have to agree to
--- before anything is written. Each is a table with a title, a Build(page,
--- choices), and optionally an OnNext that can take the footer click for itself.
+-- Seven pages, in order: what you have, what you want, how it should look, how
+-- the bars are painted, how big it should be, what to do about graphics, and a
+-- summary you have to agree to before anything is written. Each is a table with
+-- a title, a Build(page, choices), and optionally an OnNext that can take the
+-- footer click for itself.
 --
 -- The shape of the whole thing follows one rule: nothing is applied until the
 -- last step. Ticking boxes and picking layouts only edits the `choices` table,
@@ -185,6 +186,52 @@ local function ChoiceRow(parent, y, width, opts)
     return row, y - height
 end
 
+-- The re-apply settles rather than firing per step: dragging the slider walks
+-- every value in between, and each one would otherwise rewrite six addons'
+-- settings and rebuild their frames. Long enough that a drag settles once;
+-- short enough that a click on a row still feels like the click did it.
+local SIZE_SETTLE = 0.25
+
+--------------------------------------------------------------------------------
+-- Re-applying the layout while you change how it looks
+--
+-- Shared by the two screens that change the live preview rather than a plan -
+-- interface size and bar style. Both answer a question no description settles,
+-- both re-apply the whole layout to answer it, and both have to coalesce: a
+-- slider drag walks every value in between and a run of clicks is a run of
+-- rewrites.
+--
+-- The timer hangs off the step so that rendering it again, or closing the
+-- window, can cancel one that is still in flight - see Steps:CancelPending.
+--------------------------------------------------------------------------------
+-- `getStatus` rather than the label itself: both screens build their status line
+-- below the controls that drive it, so the label does not exist yet at the point
+-- this is set up and a captured value would be nil forever.
+local function Settle(step, choices, getStatus, describe)
+    local function Apply()
+        step.timer = nil
+
+        local ok, reason = PUI.Preview:Start(choices.layout, choices)
+        local status = getStatus()
+        if not status then return end
+
+        if ok then
+            status:SetText(describe())
+            Style.Text(status, Style.Size.value, Style.Alpha.secondary)
+        else
+            -- Combat, almost always. The choice still stands; it just does not
+            -- reach the screen until the fight is over.
+            status:SetText(reason or "Could not change that right now.")
+            Style.Text(status, Style.Size.value, Style.Alpha.primary, C.amber)
+        end
+    end
+
+    return function()
+        if step.timer then step.timer:Cancel() end
+        step.timer = C_Timer.NewTimer(SIZE_SETTLE, Apply)
+    end
+end
+
 --------------------------------------------------------------------------------
 -- 1. Welcome - the roster
 --------------------------------------------------------------------------------
@@ -357,6 +404,15 @@ Steps.list.layout = {
                 choices.autoSwitch = Layouts:AutoSwitchFor(key)
             end
 
+            -- Same rule as the graphics screen: the bar colour follows the
+            -- layout until somebody answers the bars screen themselves, and
+            -- after that their answer survives a change of mind about the
+            -- layout. Texture is never suggested by a layout, so it is never
+            -- overwritten here.
+            if not choices.styleTouched and choices.style then
+                choices.style.colour = Layouts:ColourOf(key)
+            end
+
             -- The one row that puts nothing on screen. Whatever was being
             -- previewed goes back, and that is all.
             if key == Layouts.CURRENT then
@@ -460,7 +516,153 @@ Steps.list.layout = {
 }
 
 --------------------------------------------------------------------------------
--- 4. Interface size
+-- 4. Bars
+--
+-- Colour and texture, lifted out of the layouts because they were never really
+-- part of one. Where the frames sit and what colour they are painted are
+-- independent questions, and the layouts were answering both - which made
+-- "Peavers UI, but I can still see class colours" a thing nobody could ask for.
+--
+-- It is also the screen that says the quiet part out loud: none of this is
+-- permanent. Everything the pack writes is an ordinary setting in a module's own
+-- page, and people who do not know that treat an installer as a one-way door and
+-- pick nothing rather than pick wrong.
+--------------------------------------------------------------------------------
+
+Steps.list.bars = {
+    title = "How the bars look",
+    subtitle = "Two things the layouts used to decide for you. Both change as you " ..
+               "click, and both are ordinary settings afterwards - nothing here " ..
+               "is a decision you are stuck with.",
+
+    Build = function(self, page, choices)
+        local width = PUI.Wizard:ContentWidth()
+
+        if self.timer then
+            self.timer:Cancel()
+            self.timer = nil
+        end
+
+        -- Keeping your own setup writes no bars, so there is nothing to paint.
+        if choices.layout == Layouts.CURRENT then
+            local note = Paragraph(page,
+                "You are keeping your own setup, so the pack is not styling any bars - " ..
+                "your colours and textures stay exactly as you have them.\n\n" ..
+                "Each module's own settings page still has both, if you want to change " ..
+                "them without taking a layout.", width)
+            note:SetPoint("TOPLEFT", 0, -4)
+            return
+        end
+
+        choices.style = choices.style or {}
+        local style = choices.style
+        local status
+
+        local ApplySoon = Settle(self, choices, function() return status end, function()
+            local colour = style.colour == "flat" and "Flat black" or "Class colours"
+            return "On screen now: " .. colour .. ". Hide the installer to see it properly."
+        end)
+
+        ------------------------------------------------------------------------
+        -- Colour
+        ------------------------------------------------------------------------
+        local rows = {}
+        local suggested = Layouts:ColourOf(choices.layout)
+
+        local function SelectColour(key, applyIt)
+            style.colour = key
+            choices.styleTouched = true
+            for rowKey, row in pairs(rows) do
+                row:SetSelected(rowKey == key)
+            end
+            if applyIt then ApplySoon() end
+        end
+
+        local y = Style.Section(page, "Health bars", 0, width)
+
+        for _, colour in ipairs(Layouts.colours) do
+            local row, nextY = ChoiceRow(page, y, width, {
+                title = colour.label,
+                -- Marked, not forced. The layout still has an opinion and it is
+                -- worth knowing which, but it is only a starting point.
+                tagline = colour.key == suggested and "what this layout uses" or nil,
+                blurb = colour.blurb,
+                onClick = function() SelectColour(colour.key, true) end,
+            })
+            rows[colour.key] = row
+            y = nextY
+        end
+
+        ------------------------------------------------------------------------
+        -- Texture
+        --
+        -- A dropdown rather than rows: the list is whatever this client has, and
+        -- with LibSharedMedia or Details installed that is dozens of entries.
+        ------------------------------------------------------------------------
+        y = Style.Section(page, "Bar texture", y, width)
+
+        local options = { { value = "", label = "The pack's own" } }
+        local textures = PeaversCommons.ConfigManager
+            and PeaversCommons.ConfigManager.GetBarTextures
+            and PeaversCommons.ConfigManager.GetBarTextures() or {}
+        for path, name in pairs(textures) do
+            options[#options + 1] = { value = path, label = name }
+        end
+        table.sort(options, function(a, b)
+            -- The pack's own stays first; everything else is alphabetical.
+            if a.value == "" then return true end
+            if b.value == "" then return false end
+            return a.label < b.label
+        end)
+
+        local dropdown = W:CreateDropdown(page, "Texture", {
+            width = math.min(320, width),
+            selected = style.texture or "",
+            options = options,
+            onChange = function(value)
+                -- "" is the sentinel for "leave it to the collection": a dropdown
+                -- cannot carry nil, and nil is the value the module wants.
+                style.texture = value ~= "" and value or nil
+                choices.styleTouched = true
+                ApplySoon()
+            end,
+        })
+        dropdown:SetPoint("TOPLEFT", 0, y - 6)
+        y = y - 56
+
+        ------------------------------------------------------------------------
+        -- Getting the window out of the way
+        ------------------------------------------------------------------------
+        local hide = Style.Button(page, "Hide the installer and look", {
+            variant = "secondary",
+            width = 200,
+            onClick = function()
+                PUI.Wizard:EnterPreview(choices.layout)
+            end,
+        })
+        hide:SetPoint("TOPLEFT", 0, y)
+
+        status = Style.Label(page, "", Style.Size.value, Style.Alpha.muted, {
+            width = width - 216,
+            wrap = true,
+        })
+        status:SetPoint("TOPLEFT", 212, y - 4)
+
+        y = y - 46
+
+        local note = Paragraph(page,
+            "Both of these are ordinary settings once the pack is installed. Every " ..
+            "module keeps a page in /peavers with its own colours and textures on it, " ..
+            "and Edit Mode moves anything the layout placed - so if you pick wrong " ..
+            "here, you change it there rather than running the installer again.", width)
+        note:SetPoint("TOPLEFT", 0, y)
+
+        SelectColour(style.colour or suggested, false)
+    end,
+}
+
+--------------------------------------------------------------------------------
+-- 5. Interface size
 --
 -- The layout screen answers what this should look like. This one answers how
 -- big, which has a different right answer on every machine and was the one thing
@@ -473,13 +675,6 @@ Steps.list.layout = {
 -- rows re-apply the whole layout at the new canvas and the window can stand
 -- aside to let you look.
 --------------------------------------------------------------------------------
-
--- The re-apply settles rather than firing per step: dragging the slider walks
--- every value in between, and each one would otherwise rewrite six addons'
--- settings and rebuild their frames. Long enough that a drag settles once;
--- short enough that a click on a row still feels like the click did it.
-local SIZE_SETTLE = 0.25
-
 Steps.list.size = {
     title = "How big should it be",
     subtitle = "The layouts are drawn at a fixed size so they land in the same place " ..
@@ -564,26 +759,10 @@ Steps.list.size = {
 
         local recommended = Layouts:RecommendedCanvas()
 
-        local function Apply()
-            self.timer = nil
-
-            local ok, reason = PUI.Preview:Start(choices.layout, choices)
-            if not status then return end
-
-            if ok then
-                status:SetText("On screen now at " .. Layouts:SizeLabel(choices.canvas) ..
-                    ". Hide the installer to see it properly.")
-                Style.Text(status, Style.Size.value, Style.Alpha.secondary)
-            else
-                status:SetText(reason or "Could not change the size right now.")
-                Style.Text(status, Style.Size.value, Style.Alpha.primary, C.amber)
-            end
-        end
-
-        local function ApplySoon()
-            if self.timer then self.timer:Cancel() end
-            self.timer = C_Timer.NewTimer(SIZE_SETTLE, function() Apply() end)
-        end
+        local ApplySoon = Settle(self, choices, function() return status end, function()
+            return "On screen now at " .. Layouts:SizeLabel(choices.canvas) ..
+                ". Hide the installer to see it properly."
+        end)
 
         -- `custom` is the row the slider drives. Clicking a named size moves the
         -- slider to match; moving the slider lights `custom`, because a value
@@ -701,7 +880,7 @@ Steps.list.size = {
 }
 
 --------------------------------------------------------------------------------
--- 5. Graphics
+-- 6. Graphics
 --------------------------------------------------------------------------------
 
 Steps.list.graphics = {
@@ -866,7 +1045,7 @@ Steps.list.graphics = {
 }
 
 --------------------------------------------------------------------------------
--- 6. Review, then done
+-- 7. Review, then done
 --
 -- One step wearing two faces. Keeping the result on the same page as the plan
 -- is deliberate: the summary you agreed to and the report of what happened line
@@ -1051,9 +1230,9 @@ Steps.list.review = {
     end,
 }
 
--- The footer counts these to say "step 3 of 6", so this is also the length of
+-- The footer counts these to say "step 3 of 7", so this is also the length of
 -- the wizard.
-Steps.order = { "welcome", "modules", "layout", "size", "graphics", "review" }
+Steps.order = { "welcome", "modules", "layout", "bars", "size", "graphics", "review" }
 
 -- The review step carries its own result between renders, which would otherwise
 -- survive into the next run and show a stale report. Cleared whenever the
@@ -1072,10 +1251,12 @@ end
 -- survived it would put the layout straight back on a fraction of a second
 -- later, over the settings that had just been restored.
 function Steps:CancelPending()
-    local size = self.list.size
-    if size and size.timer then
-        size.timer:Cancel()
-        size.timer = nil
+    for _, key in ipairs({ "bars", "size" }) do
+        local step = self.list[key]
+        if step and step.timer then
+            step.timer:Cancel()
+            step.timer = nil
+        end
     end
 end
 
