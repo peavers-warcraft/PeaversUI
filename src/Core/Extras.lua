@@ -214,18 +214,6 @@ Extras.list = {
     -- Quality of life
     ----------------------------------------------------------------------------
     {
-        key = "prat",
-        name = "Prat",
-        folders = { "Prat-3.0" },
-        category = "quality",
-        blurb = "Chat features.",
-        why = "PeaversChat restyles the chat window and adds links, copy and a " ..
-              "position. Prat is what to add if you want the deeper chat " ..
-              "features on top - the two coexist.",
-        url = CURSE .. "prat-3-0",
-        profile = { how = "/prat - Profiles.", text = nil },
-    },
-    {
         key = "blizzmove",
         name = "BlizzMove",
         folders = { "BlizzMove" },
