@@ -31,7 +31,7 @@ local PUI_DEFAULTS = {
     -- currently applied, and so re-opening the wizard starts where you left off
     -- rather than back at the factory defaults. "current" means the player kept
     -- their own setup rather than taking a layout.
-    layout = "standard",
+    layout = "peavers",
     graphicsPreset = "none",
 
     -- The canvas height, in UI units, the layout was drawn for - the installer's
@@ -48,6 +48,11 @@ local PUI_DEFAULTS = {
     -- false once an install from before revisions existed has been migrated,
     -- true once the player has been told about pinning. nil for everybody else.
     versioningNoticeShown = nil,
+
+    -- The retired layout key this account was moved off, until it has been told
+    -- once at login. nil for everybody who was never moved. See
+    -- Versioning:MigrateRetired.
+    retiredFrom = nil,
 
     -- The undo for the last layout update applied at login, in the same shape as
     -- previewRestore. Kept until the next update replaces it.

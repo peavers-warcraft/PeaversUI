@@ -537,7 +537,13 @@ for _, ctx in ipairs(PPERF.AutoSwitch.contexts) do contextKeys[ctx.key] = true e
 local layoutsChecked, keysChecked = 0, 0
 for _, entry in ipairs(Layouts:Sorted()) do
     layoutsChecked = layoutsChecked + 1
-    for moduleKey, overrides in pairs(entry.layout.overrides or {}) do
+
+    -- The resolved overrides, not the shipped table: what has to be a real
+    -- setting is what the installer actually merges into another addon's config.
+    -- A layout may place a frame from a screen corner, and `edge`, `edgeX` and
+    -- `edgeY` are this file's vocabulary rather than PeaversUnitFrames' - they
+    -- become x and y on the way through and must not survive the trip.
+    for moduleKey, overrides in pairs(Layouts:OverridesFor(entry.key) or {}) do
         local known = KNOWN[moduleKey]
         assert(known, entry.key .. " overrides unknown module '" .. moduleKey .. "'")
         for _ in pairs(overrides) do keysChecked = keysChecked + 1 end
@@ -612,11 +618,11 @@ for _, entry in ipairs(Layouts:Sorted()) do
         entry.key .. " chat should be painted the same flat black as the unit frames")
 end
 
--- The transcription still holds: Standard derives to exactly what was on screen.
-local standardBars = Layouts:Get("standard").overrides.systembars
+-- The transcription still holds: Peavers UI derives to exactly what was on screen.
+local standardBars = Layouts:Get("peavers").overrides.systembars
 assert(standardBars.framePoint == "TOPRIGHT" and standardBars.frameX == 0
     and standardBars.frameY == -155 and standardBars.frameWidth == 157,
-    "docking moved the Standard system bars away from the transcribed position")
+    "docking moved the Peavers UI system bars away from the transcribed position")
 
 --------------------------------------------------------------------------------
 -- Interface size: the same layout drawn on a shorter canvas
@@ -665,9 +671,18 @@ for _, entry in ipairs(Layouts:Sorted()) do
         sizesChecked = sizesChecked + 1
     end
 
-    -- Untouched by the arithmetic above, which is the point of the copy.
-    assert(shipped.unitframes.units.player.y == drawn.unitframes.units.player.y,
-        entry.key .. " was resized in place - the shipped layout must never move")
+    -- Untouched by the arithmetic above, which is the point of the copy. Asked by
+    -- deriving the same canvas twice rather than by comparing against the shipped
+    -- table, because an edge-placed layout has no x or y to compare with: it has
+    -- `edge`, and the whole question is whether that survived being resolved. A
+    -- table mutated in place would scale a second time and the two would differ.
+    local again = Layouts:OverridesFor(entry.key, 1080)
+    for unit, block in pairs(big.unitframes.units) do
+        assert(again.unitframes.units[unit].x == block.x
+            and again.unitframes.units[unit].y == block.y,
+            entry.key .. " " .. unit .. " moved between two identical derivations - " ..
+            "the shipped layout is being edited in place")
+    end
 
     -- The bars are re-docked from the scaled minimap rather than scaled
     -- themselves, or they would take the factor twice and float off the corner.
@@ -690,19 +705,19 @@ end
 
 -- A size other than the drawn one is pinned as a number, because a mode would
 -- recompute later and move the canvas out from under the positions just written.
-local laptop = Layouts:OverridesFor("standard", 1080)
+local laptop = Layouts:OverridesFor("peavers", 1080)
 assert(laptop.scaler.scaleMode == "custom" and math.abs(laptop.scaler.scale - 768 / 1080) < 1e-9,
     "a custom canvas must pin a fixed scale rather than a resolution-dependent mode")
 
--- Standard's unit frame row sits at y = -395 on the 1440 canvas, which is 55% of
+-- Peavers UI unit frame row sits at y = -395 on the 1440 canvas, which is 55% of
 -- the way down. On 1080 that has to be -296, not -395: at -395 the row would be
 -- 73% of the way down a shorter screen, which is how the pack came out "all out
 -- of place" before the canvas was pinned at all.
 assert(laptop.unitframes.units.player.y == -296,
-    "Standard's unit frames are not the same fraction down a 1080-unit screen, got "
+    "Peavers UI unit frames are not the same fraction down a 1080-unit screen, got "
     .. tostring(laptop.unitframes.units.player.y))
 assert(laptop.unitframes.units.player.width == 170,
-    "Standard's unit frames should keep their width in UI units, so a shorter canvas draws them larger")
+    "Peavers UI unit frames should keep their width in UI units, so a shorter canvas draws them larger")
 
 -- Percentages round-trip: the readouts in the installer are derived from the
 -- canvas rather than stored beside it.
@@ -717,6 +732,114 @@ assert(Layouts:CanvasFor(99) == Layouts:CanvasFor(Layouts.SIZE_MAX),
 -- canvas as drawn rather than a guess.
 assert(Layouts:RecommendedCanvas() == Layouts.CANVAS_HEIGHT,
     "with no GetPhysicalScreenSize the suggestion must be the canvas as drawn")
+
+--------------------------------------------------------------------------------
+-- Frames placed from a screen corner
+--
+-- The reason this exists at all: a centre offset is a fixed distance from the
+-- middle, and half a screen is 960 units wide on 4:3 and 1680 on 21:9. A layout
+-- that wants a frame in the top-left corner cannot say so in centre offsets
+-- without being wrong on every monitor but the author's.
+--
+-- So the assertions are about what changes with the shape of the screen and what
+-- does not. The x of a corner frame has to follow the aspect ratio; its y must
+-- not, because the canvas is the same number of units tall on every monitor.
+--------------------------------------------------------------------------------
+
+local function AspectAs(ratio, body)
+    local previous = _G.GetPhysicalScreenSize
+    _G.GetPhysicalScreenSize = function() return 1440 * ratio, 1440 end
+    local ok, err = pcall(body)
+    _G.GetPhysicalScreenSize = previous
+    if not ok then error(err, 0) end
+end
+
+local wide, narrow
+AspectAs(21 / 9, function() wide = Layouts:OverridesFor("traditional") end)
+AspectAs(4 / 3, function() narrow = Layouts:OverridesFor("traditional") end)
+
+-- 21:9 puts the left edge at -1680, 4:3 at -960. The frame's centre sits 147
+-- units inside whichever that is, so the two disagree by exactly the difference
+-- between the two half-widths - and a layout written in centre offsets could not
+-- have done that.
+assert(wide.unitframes.units.player.x == -1533,
+    "a corner frame did not follow the screen edge on 21:9, got "
+    .. tostring(wide.unitframes.units.player.x))
+assert(narrow.unitframes.units.player.x == -813,
+    "a corner frame did not follow the screen edge on 4:3, got "
+    .. tostring(narrow.unitframes.units.player.x))
+
+-- Vertically there is nothing to follow: the canvas is 1440 units tall whatever
+-- shape the monitor is, so both screens put the frame at the same height.
+assert(wide.unitframes.units.player.y == narrow.unitframes.units.player.y,
+    "the canvas is a fixed height, so a corner frame's y must not move with the aspect ratio")
+assert(wide.unitframes.units.player.y == 660,
+    "a frame 60 units below the top of a 1440-unit canvas should sit at y = 660, got "
+    .. tostring(wide.unitframes.units.player.y))
+
+-- The corner margin does not scale with the interface size, because the frame it
+-- is a margin around does not either. If it did, the frame would grow while its
+-- gap shrank and end up hard against the edge of the screen at the largest sizes.
+local huge = Layouts:OverridesFor("traditional", Layouts:CanvasFor(Layouts.SIZE_MAX))
+local halfHeight = Layouts:CanvasFor(Layouts.SIZE_MAX) / 2
+assert(halfHeight - huge.unitframes.units.player.y == 60,
+    "the corner margin moved with the interface size; it must stay put, got "
+    .. tostring(halfHeight - huge.unitframes.units.player.y))
+
+-- A layout that places from the centre is untouched by any of this.
+local centred = Layouts:OverridesFor("modern")
+assert(centred.unitframes.units.player.x == -310,
+    "a centre-placed layout must not be touched by edge resolution")
+
+--------------------------------------------------------------------------------
+-- Layouts that no longer exist
+--
+-- Compact, Cinematic and Raid were retired, and their keys are still sitting in
+-- other people's saved variables. Every one has to keep resolving to something,
+-- or the settings page cannot name what is installed and /pui apply prints usage
+-- at somebody who typed a layout that worked last week.
+--------------------------------------------------------------------------------
+
+for _, dead in ipairs({ "standard", "compact", "cinematic", "raid" }) do
+    assert(Layouts.list[dead] == nil, dead .. " should not be a layout any more")
+    assert(Layouts:Get(dead), dead .. " must still resolve to its replacement")
+    assert(Layouts.list[Layouts:Resolve(dead)], dead .. " must resolve to a living key")
+end
+
+assert(Layouts:Resolve("peavers") == "peavers", "a living key resolves to itself")
+assert(Layouts:Resolve("nonsense") == nil, "an unknown key resolves to nothing")
+assert(Layouts:Resolve(Layouts.CURRENT) == Layouts.CURRENT,
+    "keeping your current setup is not a layout and must survive resolution")
+
+-- Choices built from a dead key carry the living one, or the next install would
+-- write the dead key straight back to disk.
+assert(Installer:NewChoices("raid").layout == "modern",
+    "a retired key must not survive into the choices")
+
+-- The account migration: pointed at the replacement and pinned, because a
+-- substitution is not a choice the player made and their screen must not change.
+PUI.Config.installedVersion = "1.0.8"
+PUI.Config.layout = "cinematic"
+PUI.Config.track = PUI.Versioning.LATEST
+PUI.Config.retiredFrom = nil
+assert(PUI.Versioning:MigrateRetired(), "an account on a retired layout should be migrated")
+assert(PUI.Config.layout == "modern", "a retired account should be moved to the replacement")
+assert(PUI.Config.track == PUI.Versioning.PINNED,
+    "a substituted account must be pinned, or the replacement would be applied over its screen")
+local from = PUI.Versioning:RetiredNotice()
+assert(from == "cinematic", "the account should remember what it was moved off")
+PUI.Versioning:ClearRetiredNotice()
+assert(not PUI.Versioning:RetiredNotice(), "the notice is given once")
+assert(not PUI.Versioning:MigrateRetired(), "migration runs once")
+
+-- A rename is not a substitution: same layout, new name, nothing to say and no
+-- reason to take anybody off the latest.
+PUI.Config.layout = "standard"
+PUI.Config.track = PUI.Versioning.LATEST
+assert(PUI.Versioning:MigrateRetired(), "a renamed layout should still be migrated")
+assert(PUI.Config.layout == "peavers", "standard is peavers under a new name")
+assert(PUI.Config.track == PUI.Versioning.LATEST, "a rename must not pin the account")
+assert(not PUI.Versioning:RetiredNotice(), "a rename has nothing to announce")
 
 --------------------------------------------------------------------------------
 -- Detection
@@ -734,7 +857,7 @@ Stubs.ResetCounts()
 framesCreated = 0
 hops = 0
 
-local choices = Installer:NewChoices("standard")
+local choices = Installer:NewChoices("peavers")
 assert(choices.modules.chat == false, "an absent module must not start ticked")
 choices.graphicsPreset = "balanced"
 
@@ -758,11 +881,11 @@ assert(PSC.Scaler.applied >= 1, "the scale was never applied")
 -- rather than the owning table - which the stand-in asserts on every call.
 assert(PCB.Config.units.player.enabled == true, "the player cast bar should be on after an install")
 assert(PCB.Config.units.player.anchorToCooldownManager == true,
-    "Standard anchors the player cast bar to the Cooldown Manager")
-assert(PCB.Config.units.pet.enabled == false, "Standard leaves the pet cast bar off")
+    "Peavers UI anchors the player cast bar to the Cooldown Manager")
+assert(PCB.Config.units.pet.enabled == false, "Peavers UI leaves the pet cast bar off")
 assert(PCB.Blizzard.applied >= 1, "the cast bars never handed Blizzard's own over")
 
--- Layout values landed. These are the Standard layout, which is a transcription
+-- Layout values landed. These are the Peavers UI layout, which is a transcription
 -- of a live install rather than a set of round numbers - so they are spot checks
 -- on the transcription as much as on the installer.
 assert(PUF.Config.units.player.x == -429, "unit frame position not written")
@@ -770,7 +893,7 @@ assert(PUF.Config.units.player.y == -395, "unit frame position not written")
 assert(PUF.Config.units.player.healthColorMode == "custom", "flat health bars not written")
 assert(PUF.Config.units.player.healthColor.r == 0, "health colour not written")
 -- Configured but off, so switching it on later puts it in the right place.
-assert(PUF.Config.units.focus.enabled == false, "focus should be off in Standard")
+assert(PUF.Config.units.focus.enabled == false, "focus should be off in Peavers UI")
 assert(PUF.Config.units.focus.x == -600, "focus should still be positioned while off")
 
 assert(PMM.Config.size == 155 and PMM.Config.enabled == true, "minimap not configured")
@@ -778,7 +901,7 @@ assert(PMM.Config.widgets.calendar == "hidden", "minimap widget dispositions not
 assert(PMM.Config.widgetLayout.difficulty.scale == 0.75, "minimap widget layout not written")
 
 assert(PTT.Config.anchorMode == "anchor" and PTT.Config.enabled == true, "tooltip not configured")
-assert(PTT.Config.healthBar == false, "tooltip health bar should be off in Standard")
+assert(PTT.Config.healthBar == false, "tooltip health bar should be off in Peavers UI")
 
 assert(PSB.Config.framePoint == "TOPRIGHT" and PSB.Core.frame.shown == true, "system bars not configured")
 assert(PSB.Config.barSpacing == -1, "system bar overlap not written")
@@ -811,7 +934,7 @@ assert(evaluations == 1, "auto-switch should be evaluated once per install, got 
 
 -- The pack recorded the run.
 assert(PUI.Config.installedVersion == PUI.version, "install was not recorded")
-assert(PUI.Config.layout == "standard", "layout was not recorded")
+assert(PUI.Config.layout == "peavers", "layout was not recorded")
 
 -- Nothing was drawn.
 assert(framesCreated == 0, framesCreated .. " frames created during an install; expected none")
@@ -819,19 +942,25 @@ assert(framesCreated == 0, framesCreated .. " frames created during an install; 
 --------------------------------------------------------------------------------
 -- Ordering: the toggle has to run before the layout
 --
--- Cinematic switches target-of-target off. Turning unit frames on sets every
--- frame's `enabled` back to true, so if the installer ever applies the layout
--- first and the toggle second, this is the assertion that catches it.
+-- Every layout ships the focus frame switched off but fully positioned. Turning
+-- unit frames on sets every frame's `enabled` back to true, so if the installer
+-- ever applies the layout first and the toggle second, the focus frame comes
+-- back on and this is the assertion that catches it.
+--
+-- The frame under test used to be target-of-target, which the Cinematic layout
+-- switched off. Cinematic is retired; focus is the frame all three survivors
+-- have an opinion about, and the ordering it proves is the same.
 --------------------------------------------------------------------------------
 
-local cinematic = Installer:NewChoices("cinematic")
-cinematic.graphicsPreset = "none"
-Installer:Apply(cinematic)
+local ordering = Installer:NewChoices("modern")
+ordering.graphicsPreset = "none"
+Installer:Apply(ordering)
 
-assert(PUF.Config.units.targettarget.enabled == false,
-    "cinematic left target-of-target on: module toggles must be applied before layout overrides")
-assert(PUF.Config.units.player.enabled == true, "cinematic should leave the player frame on")
-assert(PMM.Config.visibility == "hover", "cinematic minimap not applied")
+assert(PUF.Config.units.focus.enabled == false,
+    "modern left the focus frame on: module toggles must be applied before layout overrides")
+assert(PUF.Config.units.player.enabled == true, "modern should leave the player frame on")
+assert(PUF.Config.units.targettarget.enabled == true, "modern keeps target-of-target on")
+assert(PMM.Config.size == 160, "modern minimap not applied")
 assert(#appliedPresets == 1, "graphicsPreset 'none' must not touch the client")
 
 -- "Leave my graphics alone" has to mean alone. The screen was shown (a plan is
@@ -845,10 +974,10 @@ assert(evaluations == 1, "a 'none' baseline must not evaluate")
 -- Off means off
 --
 -- An unticked module gets its toggle and none of the layout. The minimap is a
--- good probe: `size` is the value the raid layout would have written.
+-- good probe: `size` is the value the Traditional layout would have written.
 --------------------------------------------------------------------------------
 
-local partial = Installer:NewChoices("raid")
+local partial = Installer:NewChoices("traditional")
 partial.modules.minimap = false
 partial.graphicsPreset = "none"
 PMM.Config.size = 999
@@ -864,7 +993,14 @@ assert(#partialResult.disabled == 1 and partialResult.disabled[1] == "MiniMap",
 for _, label in ipairs(partialResult.applied) do
     assert(label ~= "MiniMap", "an unticked module must not be reported as configured")
 end
-assert(PUF.Config.units.player.x == -300, "the raid layout should still have reached unit frames")
+-- Traditional places the player frame from the top-left corner: with no screen
+-- to measure the aspect falls back to 16:9, so a 1440-unit canvas is 2560 wide
+-- and the frame's centre lands 147 units in from x = -1280.
+assert(PUF.Config.units.player.x == -1133,
+    "the Traditional layout should still have reached unit frames, got "
+    .. tostring(PUF.Config.units.player.x))
+assert(PUF.Config.units.player.edge == nil,
+    "edge placement is this pack's vocabulary and must not reach the module")
 
 --------------------------------------------------------------------------------
 -- A layout-only apply does not touch graphics at all
@@ -880,7 +1016,7 @@ PPERF.Config.autoSwitchRaid = "minimum"
 local presetsBefore = #appliedPresets
 local evaluationsBefore = evaluations
 
-local layoutOnly = Installer:NewChoices("compact")
+local layoutOnly = Installer:NewChoices("traditional")
 layoutOnly.graphicsPreset = "none"
 layoutOnly.autoSwitch = nil
 Installer:Apply(layoutOnly)
@@ -891,7 +1027,7 @@ assert(PPERF.Config.autoSwitchRaid == "minimum",
     "a layout-only apply must not rewrite a context")
 assert(#appliedPresets == presetsBefore, "a layout-only apply must not apply a preset")
 assert(evaluations == evaluationsBefore, "a layout-only apply must not evaluate")
-assert(PUF.Config.units.player.x == -210, "the compact layout should still have been applied")
+assert(PUF.Config.units.player.x == -1133, "the Traditional layout should still have been applied")
 
 --------------------------------------------------------------------------------
 -- Live preview round-trips exactly
@@ -974,15 +1110,15 @@ Modules:SetEnabled(Modules.byKey.tooltip, true)
 local before = Snapshot()
 assert(PMM.Config.widgets.calendar == nil, "fixture should start with no widget dispositions")
 
-local previewChoices = Installer:NewChoices("standard")
-local started, reason = PUI.Preview:Start("standard", previewChoices)
+local previewChoices = Installer:NewChoices("peavers")
+local started, reason = PUI.Preview:Start("peavers", previewChoices)
 assert(started, "preview did not start: " .. tostring(reason))
 assert(PUI.Preview:IsActive(), "preview should be active once started")
 
 -- The layout screen re-applies its selection every time it is drawn, and uses
 -- this to avoid reverting and re-applying the same layout for no reason.
-assert(PUI.Preview:IsShowing("standard"), "IsShowing should recognise the live layout")
-assert(not PUI.Preview:IsShowing("raid"), "IsShowing must not match a different layout")
+assert(PUI.Preview:IsShowing("peavers"), "IsShowing should recognise the live layout")
+assert(not PUI.Preview:IsShowing("traditional"), "IsShowing must not match a different layout")
 
 -- It really applied - a preview that does nothing would pass the restore test.
 assert(PMM.Config.size == 155, "preview did not apply the layout")
@@ -1000,11 +1136,11 @@ local difference = FirstDifference(before, Snapshot())
 assert(not difference, "revert did not put every setting back exactly: " .. tostring(difference))
 
 -- Keep is the other exit: it stops tracking without putting anything back.
-PUI.Preview:Start("raid", previewChoices)
+PUI.Preview:Start("traditional", previewChoices)
 assert(PUI.Preview:Keep(), "keep should report success")
 assert(not PUI.Preview:IsActive(), "keep should end the preview")
 assert(PUI.Config.previewRestore == nil, "keep must clear the outstanding restore")
-assert(PUF.Config.units.player.x == -300, "keep must leave the previewed layout in place")
+assert(PUF.Config.units.player.x == -1133, "keep must leave the previewed layout in place")
 
 --------------------------------------------------------------------------------
 -- Re-running the installer gives a clean result
@@ -1023,9 +1159,9 @@ PMM.Config.size = 999                       -- a setting the layout does name
 PMM.Config.buttonSpacing = 77               -- one it does not
 PMM.Config.strayKeyFromOldVersion = true    -- a key the defaults never had
 PTT.Config.scale = 1.6                      -- another the layout does not name
-PSB.Config.barAlpha = 0.42                  -- systembars, not named by Standard
+PSB.Config.barAlpha = 0.42                  -- systembars, not named by Peavers UI
 
-local cleanChoices = Installer:NewChoices("standard")
+local cleanChoices = Installer:NewChoices("peavers")
 assert(cleanChoices.resetFirst == true,
     "re-running should default to a clean result, not a merge onto old state")
 cleanChoices.graphicsPreset = "none"
@@ -1045,7 +1181,7 @@ assert(PSB.Config.barAlpha == 1.0, "system bar alpha should be back at its defau
 -- And with the box unticked it is a merge again, which is the whole point of it
 -- being a box.
 PTT.Config.scale = 1.6
-local mergeChoices = Installer:NewChoices("standard")
+local mergeChoices = Installer:NewChoices("peavers")
 mergeChoices.resetFirst = false
 mergeChoices.graphicsPreset = "none"
 mergeChoices.autoSwitch = nil
@@ -1056,7 +1192,7 @@ PTT.Config.fontSize = 21
 Installer:Apply(mergeChoices)
 assert(PTT.Config.fontSize == 12,
     "standard names fontSize too")
--- cursorOffsetX is a good probe precisely because the Standard layout has no
+-- cursorOffsetX is a good probe precisely because the Peavers UI layout has no
 -- opinion about it: it parks tooltips, so the cursor offsets never come up.
 PTT.Config.cursorOffsetX = 19
 Installer:Apply(mergeChoices)
@@ -1073,7 +1209,7 @@ assert(PTT.Config.cursorOffsetX == 19,
 -- modules already drawn for it.
 --------------------------------------------------------------------------------
 
-local sized = Installer:NewChoices("standard")
+local sized = Installer:NewChoices("peavers")
 sized.canvas = 1080
 sized.graphicsPreset = "none"
 sized.autoSwitch = nil
@@ -1091,7 +1227,7 @@ assert(PUF.Config.units.player.healthColorMode == "custom",
 
 -- And back again, which is what re-running at the default has to do. A layout
 -- that had been scaled in place would come back at 75% of where it started.
-local back = Installer:NewChoices("standard")
+local back = Installer:NewChoices("peavers")
 back.canvas = PUI.Layouts.CANVAS_HEIGHT
 back.graphicsPreset = "none"
 back.autoSwitch = nil
@@ -1104,13 +1240,13 @@ assert(PSC.Config.scaleMode == "1440p", "the drawn size should go back to naming
 -- layout update redraws for the same canvas rather than snapping back to 1440.
 PUI.Config:MarkInstalled(sized)
 assert(PUI.Config.canvas == 1080, "the installed interface size was not recorded")
-assert(Installer:NewChoices("standard").canvas == 1080,
+assert(Installer:NewChoices("peavers").canvas == 1080,
     "a fresh set of choices should start from the size this account is installed at")
 PUI.Config.canvas = nil
 
 -- Switching a module off must not wipe it. Turning something off means stop
 -- drawing it, not throw away how it was set up.
-local offChoices = Installer:NewChoices("standard")
+local offChoices = Installer:NewChoices("peavers")
 offChoices.modules.tooltip = false
 offChoices.graphicsPreset = "none"
 offChoices.autoSwitch = nil
@@ -1133,7 +1269,7 @@ local scalerModule = Modules.byKey.scaler
 --    `original` is one; without the carry, /pscaler restore would restore nothing.
 PSC.Config.original = { useUiScale = "1", uiScale = "0.9" }
 PSC.Config.strayScalerKey = true
-local scalerClean = Installer:NewChoices("standard")
+local scalerClean = Installer:NewChoices("peavers")
 scalerClean.graphicsPreset = "none"
 scalerClean.autoSwitch = nil
 Installer:Apply(scalerClean)
@@ -1148,7 +1284,7 @@ assert(PSC.Config.scaleMode == "1440p", "the canvas should be back on after the 
 --    asserts on exactly that.
 PSC.Config.enabled = false
 PSC.Config.original = nil
-local noScaler = Installer:NewChoices("standard")
+local noScaler = Installer:NewChoices("peavers")
 noScaler.modules.scaler = false
 noScaler.graphicsPreset = "none"
 noScaler.autoSwitch = nil
@@ -1163,7 +1299,7 @@ assert(PSC.Config.enabled == false and PSC.Config.original == nil,
 --    the mode it was in comes back.
 PSC.Config.scaleMode = "pixelPerfect"
 local restoredBefore = PSC.Scaler.restored
-assert(PUI.Preview:Start("standard", Installer:NewChoices("standard")), "scaler preview did not start")
+assert(PUI.Preview:Start("peavers", Installer:NewChoices("peavers")), "scaler preview did not start")
 assert(PSC.Config.enabled == true and PSC.Config.scaleMode == "1440p", "preview did not apply the canvas")
 assert(PSC.Config.original ~= nil, "preview must record the original scale before changing it")
 PUI.Preview:Revert()
@@ -1227,7 +1363,7 @@ assert(warning and warning:find("minimal"), "minimal mode must be reported: " ..
 PCHAT.Config.minimalBackup = {}
 PCHAT.Config.withoutBackup = { showSocialButton = false }
 
-local mergeWarn = Installer:NewChoices("standard")
+local mergeWarn = Installer:NewChoices("peavers")
 mergeWarn.resetFirst = false
 mergeWarn.graphicsPreset = "none"
 mergeWarn.autoSwitch = nil
@@ -1238,7 +1374,7 @@ assert(#warnResult.failures == 0, "a bisect mode is not a failure")
 
 -- Now the clean path: the same mess, reset on, and it simply goes away.
 PCHAT.Config.withoutBackup = { showSocialButton = false }
-local cleanWarn = Installer:NewChoices("standard")
+local cleanWarn = Installer:NewChoices("peavers")
 cleanWarn.graphicsPreset = "none"
 cleanWarn.autoSwitch = nil
 local cleanResult = Installer:Apply(cleanWarn)
@@ -1316,38 +1452,38 @@ assert(PUI.Config.layout == Layouts.CURRENT and PUI.Config.layoutRevision == nil
 
 -- An existing player who picks a layout but never touches the graphics screen
 -- keeps their graphics, and keeps a frame the layout says nothing about.
-local picked = Installer:NewChoices("raid")
+local picked = Installer:NewChoices("modern")
 picked.existing = true
 picked.resetFirst = false
 picked.graphicsPreset = "none"
 Installer:Apply(picked)
 assert(PPERF.Config.autoSwitchEnabled == true and PPERF.Config.autoSwitchRaid == "minimum",
     "an existing player's graphics changed without the graphics screen being touched")
-assert(PUF.Config.units.player.x == -300, "the picked layout should still apply")
+assert(PUF.Config.units.player.x == -310, "the picked layout should still apply")
 
 -- The wizard's answer is recorded; applying a layout any other way leaves it.
-local tracked = Installer:NewChoices("standard")
+local tracked = Installer:NewChoices("peavers")
 tracked.graphicsPreset = "none"
 tracked.autoSwitch = nil
 tracked.track = Versioning.LATEST
 Installer:Apply(tracked)
-assert(PUI.Config.layout == "standard" and PUI.Config.layoutRevision == Layouts:Get("standard").revision,
+assert(PUI.Config.layout == "peavers" and PUI.Config.layoutRevision == Layouts:Get("peavers").revision,
     "an install must record the revision it applied")
 assert(PUI.Config.track == Versioning.LATEST, "the wizard's track choice must be recorded")
-Installer:Apply(Versioning:ChoicesFor("compact"))
-assert(PUI.Config.layout == "compact" and PUI.Config.track == Versioning.LATEST,
+Installer:Apply(Versioning:ChoicesFor("traditional"))
+assert(PUI.Config.layout == "traditional" and PUI.Config.track == Versioning.LATEST,
     "applying a layout outside the wizard must not change the track")
 
 -- A preview is not an install.
 PUI.Config.layoutRevision = 1
-assert(PUI.Preview:Start("raid", Installer:NewChoices("raid")), "preview did not start")
-assert(PUI.Config.layout == "compact" and PUI.Config.layoutRevision == 1,
+assert(PUI.Preview:Start("modern", Installer:NewChoices("modern")), "preview did not start")
+assert(PUI.Config.layout == "traditional" and PUI.Config.layoutRevision == 1,
     "a preview must not record itself as the installed layout")
 PUI.Preview:Revert()
 
 -- An install from before revisions: pinned to revision 1, told once.
 PUI.Config.installedVersion = "1.0.4"
-PUI.Config.layout = "standard"
+PUI.Config.layout = "peavers"
 PUI.Config.layoutRevision = nil
 PUI.Config.track = nil
 PUI.Config.versioningNoticeShown = nil
@@ -1360,7 +1496,7 @@ assert(not Versioning:NoticeDue(), "the notice is shown once")
 assert(not Versioning:Migrate(), "migration runs once")
 
 -- Pinned and behind: never updated.
-assert(Versioning:Status().behind, "revision 1 of standard should read as behind")
+assert(Versioning:Status().behind, "revision 1 of Peavers UI should read as behind")
 assert(not Versioning:UpdateDue(), "a pinned account must never be updated")
 
 -- Following the latest: the whole layout comes back, never in combat, with an
@@ -1383,7 +1519,7 @@ assert(PUF.Config.units.player.x == -429 and PTT.Config.fontSize == 12,
 -- the whole layout - so it is on now, and the undo has to be able to say so.
 assert(PUF.Config.units.targettarget.enabled == true,
     "the update should apply every setting the layout names, frame toggles included")
-assert(PUI.Config.layoutRevision == Layouts:Get("standard").revision, "the update should record its revision")
+assert(PUI.Config.layoutRevision == Layouts:Get("peavers").revision, "the update should record its revision")
 assert(PUI.Config.updateRestore, "an update must leave its undo on disk")
 assert(not PUI.Preview:IsActive(), "an update is not a preview: closing the installer must not undo it")
 assert(not Versioning:UpdateDue(), "an updated account is no longer due")
@@ -1511,7 +1647,7 @@ AsClient(11509, {
 })
 assert(Modules.client.key == "era", "11509 should read as Classic Era, got " .. tostring(Modules.client.key))
 
-local eraPlan = Layouts:AutoSwitchFor("standard")
+local eraPlan = Layouts:AutoSwitchFor("peavers")
 assert(eraPlan.mythicplus == nil, "an Era plan must not carry a Mythic+ context")
 assert(eraPlan.raid == "quality" and eraPlan.enabled == true, "the Era plan should still come from the layout")
 assert(not Installer:InstancePhrase():find("key", 1, true), "Era wording must not mention keys")
@@ -1521,7 +1657,7 @@ end
 assert(Extras:ForClient(Extras.byKey.details), "an unrestricted entry is offered on every client")
 
 PPERF.Config.autoSwitchMythicPlus = "untouched"
-local eraChoices = Installer:NewChoices("standard")
+local eraChoices = Installer:NewChoices("peavers")
 eraChoices.graphicsPreset = "balanced"
 local eraSummary = SummaryLine(eraChoices)
 assert(eraSummary and not eraSummary:find("M+", 1, true), "the Era summary must not mention M+: " .. tostring(eraSummary))
@@ -1537,7 +1673,7 @@ AsClient(50504, {
 })
 assert(Modules.client.key == "mists", "50504 should read as Mists Classic")
 assert(Installer:InstancePhrase():find("Challenge Mode", 1, true), "Mists wording should name Challenge Mode")
-local mistsChoices = Installer:NewChoices("standard")
+local mistsChoices = Installer:NewChoices("peavers")
 mistsChoices.graphicsPreset = "balanced"
 local mistsSummary = SummaryLine(mistsChoices)
 assert(mistsSummary and mistsSummary:find("CM", 1, true) and not mistsSummary:find("M+", 1, true),

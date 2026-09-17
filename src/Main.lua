@@ -94,7 +94,7 @@ PeaversCommons.SlashCommands:Register(addonName, "pui", {
     layout = ApplyLayoutByName,
     preview = function(rest)
         local key = rest and rest:trim():lower() or ""
-        if key == "" then key = PUI.Config.layout or "standard" end
+        if key == "" then key = PUI.Config.layout or PUI.Layouts.DEFAULT end
 
         local ok, reason = PUI.Preview:Start(key, PUI.Installer:NewChoices(key))
         if ok then
@@ -204,6 +204,11 @@ PeaversCommons.Events:Init(addonName, function()
     -- have, before anything below gets to look at them.
     PUI.Versioning:Migrate()
 
+    -- And installs on a layout that has since been retired are pointed at its
+    -- replacement and pinned, so nothing further down is reasoning about a key
+    -- that no longer names anything.
+    PUI.Versioning:MigrateRetired()
+
     -- The only thing the pack ever applies at login, and only for an account
     -- that chose to follow the latest layout. Never over a loading screen and
     -- never mid-pull: in combat it waits for the fight to end.
@@ -257,6 +262,22 @@ PeaversCommons.Events:Init(addonName, function()
         if PUI.Versioning:NoticeDue() then
             C_Timer.After(6, function()
                 if PUI.Versioning:NoticeDue() then PUI.Versioning:ShowNotice() end
+            end)
+        end
+
+        -- Once, for an account whose layout was retired. Said rather than shown,
+        -- and said plainly: nothing on their screen has changed, and the only
+        -- reason they are hearing about it at all is so the different name on the
+        -- settings page is not a mystery.
+        local retired = PUI.Versioning:RetiredNotice()
+        if retired then
+            C_Timer.After(8, function()
+                local from, now = PUI.Versioning:RetiredNotice()
+                if not from then return end
+                Utils.Print(PUI, "the " .. from .. " layout has been retired. Your " ..
+                    "interface is untouched and stays exactly as it is; the pack now " ..
+                    "lists it as " .. now .. ", and /pui lets you pick again.")
+                PUI.Versioning:ClearRetiredNotice()
             end)
         end
 

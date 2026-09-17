@@ -445,7 +445,7 @@ Steps.list.layout = {
         -- highlighted row describing something the player cannot see is the
         -- worst state this screen could be in.
         ------------------------------------------------------------------------
-        local key = choices.layout or "standard"
+        local key = choices.layout or Layouts.DEFAULT
         Select(key, not PUI.Preview:IsShowing(key))
 
         -- Coming back to a layout already on screen: say so, since Select was

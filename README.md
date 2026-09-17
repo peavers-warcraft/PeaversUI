@@ -12,7 +12,8 @@ Part of the **Peavers Ultra Performance** family: addons that hold themselves to
 | Module | What it replaces |
 |---|---|
 | [PeaversUnitFrames](https://github.com/peavers-warcraft/PeaversUnitFrames) | Player, target, target of target and focus, with cast bars and auras |
-| [PeaversCastBar](https://github.com/peavers-warcraft/PeaversCastBar) | Cast bars for player, target, focus and pet, matched to the Cooldown Manager | The minimap — squared, cornered, with every addon button in one grid |
+| [PeaversCastBar](https://github.com/peavers-warcraft/PeaversCastBar) | Cast bars for player, target, focus and pet, matched to the Cooldown Manager |
+| [PeaversMiniMap](https://github.com/peavers-warcraft/PeaversMiniMap) | The minimap — squared, cornered, with every addon button in one grid |
 | [PeaversChat](https://github.com/peavers-warcraft/PeaversChat) | The chat window — flat, text tabs, clickable links, a copy button |
 | [PeaversToolTip](https://github.com/peavers-warcraft/PeaversToolTip) | Tooltips — a flat box whose border carries item quality or unit reaction |
 | [PeaversSystemBars](https://github.com/peavers-warcraft/PeaversSystemBars) | FPS and latency, as bars rather than a number in a menu |
@@ -31,10 +32,22 @@ Runs once, on your first login after installing, and never again unless you ask 
 
 1. **What you have.** Every module in the pack, and whether it is running, installed but not enabled at the character screen, or absent. Three different problems needing three different answers.
 2. **Which parts you want.** Everything on by default. Unticking a module switches it off and hands that piece of the interface back to Blizzard — it does not uninstall anything, and each module's own settings turn it back on.
-3. **How it should look.** Four layouts, below.
+3. **How it should look.** Three layouts, below.
 4. **How big it should be.** Four named sizes and a slider, below. Changes as you click, the same way the layouts do.
 5. **Graphics.** A baseline preset, and a plan for switching between presets by content. The one screen that changes the game rather than the interface, so it gets a screen of its own and an explicit yes.
 6. **A summary you have to agree to.**
+
+### The three layouts
+
+| Layout | What it is |
+|---|---|
+| **Traditional** | Your frame in the top-left corner, target beside it, target-of-target beside that — where WoW has put them since 2004. Class colours, power bars, a round minimap. Styled rather than reproduced: the positions are Blizzard's, the flat bars and the house font are the pack's. |
+| **Modern** | A pair of frames low either side of centre, above your action bars, the way retail's Edit Mode arranges it out of the box. Everything the game would have shown you — class colours, power bars, health as a number and a percentage. |
+| **Peavers UI** | The author's own interface, transcribed from a live install. Four frames in a row low on the screen, health bars painted flat black with the class colour thrown away, no power bars, almost no auras. One question, answered fast. |
+
+Traditional is the only one placed from a screen *corner* rather than from the centre, and it has to be. Unit frame positions are offsets from the middle of the screen, but half a screen is 960 UI units wide on a 4:3 monitor and 1680 on a 21:9 one — so a "top-left" frame written as a centre offset is in the corner on one monitor and floating near the middle of the screen on another. The installer works the offset out against the screen it is actually running on, then writes an ordinary position that Edit Mode can still move.
+
+Compact, Cinematic and Raid have been retired. They were three more variations on one idea — frames low and centred, drawn tighter or looser — which made the layout screen a set of near-misses rather than a choice. If you are installed on one of them, nothing on your screen changes: the pack points you at the nearest survivor, pins you so no update can rewrite anything, and says so once in chat.
 
 ### Interface size
 
@@ -72,19 +85,19 @@ Click one and your interface becomes it. Immediately, on your own screen, at you
 
 That is the whole of the feature, and it is deliberate. The first version of this screen drew a neat little schematic of where each layout put its frames — and a picture of a layout, however good, answers a question nobody actually has. What people want to know is whether *their* screen looks right, and the only thing that answers that is their screen.
 
-There is a **Hide the installer and look** button, because a 760-pixel window sits on top of exactly the frames a layout just moved. It leaves a small strip with **Back to installer** and **Undo**, so you can click through all four and compare.
+There is a **Hide the installer and look** button, because a 760-pixel window sits on top of exactly the frames a layout just moved. It leaves a small strip with **Back to installer** and **Undo**, so you can click through all three and compare.
 
 This means the layout screen writes settings before you have pressed Install, which is worth being explicit about. It is handled carefully:
 
 - **Closing the installer without finishing puts everything back.** Backing out has to mean backing out. Keeping a layout is a decision, and it has its own button — Install.
 - The undo is built by walking the layout's own override table and recording the current value at every key it is about to write, so it cannot miss a key the layout touched or invent one it did not.
 - **A key that did not exist before is recorded as absent, not skipped.** Undoing removes what a layout created as well as restoring what it changed; otherwise a layout you rejected leaves pieces of itself behind.
-- Clicking through all four never compounds: each one puts the previous back before it records anything, so every snapshot is taken against the settings you walked in with.
+- Clicking through all three never compounds: each one puts the previous back before it records anything, so every snapshot is taken against the settings you walked in with.
 - The undo is written to disk *before* the first change. If the game crashes mid-try, the next login says so and offers `/pui undo` — it does not silently rearrange your UI while you are reading the login screen.
 - Graphics are never applied this way. The effect is invisible standing in a city, and applying a preset can want a graphics restart — not something to do to somebody who clicked a card to look at it.
 - In combat the click still selects the layout but does not apply it, and says so, rather than refusing silently.
 
-`/pui preview raid`, `/pui undo` and `/pui keep` do the same thing without the wizard.
+`/pui preview modern`, `/pui undo` and `/pui keep` do the same thing without the wizard.
 ### Graphics that follow the content
 
 This is the part that a pile of frame positions does not give you.
@@ -93,18 +106,18 @@ A graphics preset you pick once is a compromise: high enough that the open world
 
 So the installer asks for two things instead of one. A **baseline**, applied now — and a **plan**, which says what happens when you zone:
 
-| Where you are | Standard | Raid | Cinematic |
+| Where you are | Traditional | Modern | Peavers UI |
 |---|---|---|---|
-| Raid | Quality | Performance | Balanced |
+| Raid | Performance | Balanced | Quality |
 | Mythic+ | Performance | Performance | Performance |
-| Dungeon | back to your own settings | Performance | no change |
-| Open world | back to your own settings | back to your own settings | no change |
+| Dungeon | no change | no change | back to your own settings |
+| Open world | back to your own settings | back to your own settings | back to your own settings |
 
 On Mists of Pandaria Classic the Mythic+ row is **Challenge Mode**. Classic Era and Anniversary have no timed dungeons, so the row is not offered there at all.
 
 Every context can also be set to **No change**, which leaves it alone entirely, or **My original settings**, which puts back the console variables you had before any preset was applied.
 
-The switching itself is PeaversPerformance''s, not this pack''s — it snapshots every CVar before it writes one, defers to after combat when it has to, and announces every switch in chat so nothing happens silently. What the pack adds is the part people never get round to: a plan that is already filled in, on a screen you were going to look at anyway.
+The switching itself is PeaversPerformance's, not this pack''s — it snapshots every CVar before it writes one, defers to after combat when it has to, and announces every switch in chat so nothing happens silently. What the pack adds is the part people never get round to: a plan that is already filled in, on a screen you were going to look at anyway.
 
 Two rules keep it honest. Choosing **Leave my graphics settings alone** as the baseline switches auto-switching off too — alone means alone. And `/pui apply <layout>`, which never asks the graphics question, never touches any of it: changing your mind about frame positions will not quietly undo a plan you set up weeks ago.
 
@@ -164,7 +177,7 @@ Scenarios driven against the real addon source, outside the game:
 
 The same case doubles as the engine's integration test, which is the only kind available for an addon whose real behaviour is "write settings into five other addons". Six of its assertions are load bearing:
 
-- **Ordering.** Module toggles run before layout overrides, because switching unit frames on resets every frame's `enabled` flag. The Cinematic layout turns target-of-target off, so if that order ever flips the build fails rather than a player noticing a frame they asked to be gone.
+- **Ordering.** Module toggles run before layout overrides, because switching unit frames on resets every frame's `enabled` flag. Every layout ships the focus frame off but fully positioned, so if that order ever flips the build fails rather than a player noticing a frame they asked to be gone.
 - **Deep merge.** A layout naming `units.player.x` must not blow away `units.player.height`.
 - **Skipping.** A module that is not running is reported, never written to.
 - **Off means off.** An unticked module gets its toggle and none of the layout.
@@ -180,14 +193,14 @@ The layout data is checked too: every key any layout writes has to be a setting 
 - Nothing is written until the final screen, so backing out changes nothing
 - Click a layout and your interface becomes it on the spot - no screenshots, no mockups, your own screen
 - Every layout you try is undone exactly if you back out, with the undo written to disk first in case the game crashes
-- Four layouts — Standard, Compact, Cinematic and Raid — covering the usual reasons people rearrange a UI
+- Three layouts — Traditional (frames top-left, the way WoW has always laid them out), Modern (low and centred, the way Edit Mode does) and Peavers UI (the author's own)
 - An interface size per install — four named sizes and a 70-200% slider — with the layout re-derived for it rather than zoomed, and a suggestion made from the screen you are on
 - Backing out of the size screen is free too: it previews like a layout and undoes like one
 - Per-module on/off, with anything you switch off handed straight back to Blizzard
 - Graphics presets applied through PeaversPerformance, which snapshots every CVar before it touches one
 - A graphics preset per context — raid, Mythic+ (Challenge Mode on Mists Classic), dungeon, open world — pre-filled by the layout you picked, so the settings follow what you are actually doing
 - Runs on retail, Classic Era, Anniversary and Mists of Pandaria Classic from one download
-- Standard is a real interface, transcribed from a live install, not four plausible-looking numbers
+- Peavers UI is a real interface, transcribed from a live install, not a set of plausible-looking numbers
 - Honest about what is missing: modules that are absent, or installed but not enabled, are named rather than silently skipped
 - Switch layouts later with one command, without touching your module choices or your graphics settings
 - Everything it writes is an ordinary setting in the module's own page afterwards
@@ -205,7 +218,7 @@ After that, the pack lives in the Peavers settings window under **UI Pack**, alo
 
 - `/pui` - Open the installer
 - `/pui settings` - Open the Peavers UI settings page
-- `/pui apply <standard|compact|cinematic|raid>` - Switch layouts without the wizard
+- `/pui apply <traditional | modern | peavers>` - Switch layouts without the wizard
 - `/pui preview <layout>` - Try a layout on without the wizard
 - `/pui undo` - Put your settings back after a preview
 - `/pui keep` - Stop treating a tried-on layout as temporary

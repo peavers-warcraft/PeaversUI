@@ -90,7 +90,10 @@ function Installer:NewChoices(layoutKey)
     -- it has no overrides, no graphics suggestion and no revision, hence the
     -- empty table standing in for one.
     local keepCurrent = layoutKey == Layouts.CURRENT
-    local key = (keepCurrent or Layouts:Get(layoutKey)) and layoutKey or "standard"
+    -- Resolved, not merely checked: an account installed on a retired layout
+    -- would otherwise carry that dead key straight back into the choices and
+    -- record it again on the next install.
+    local key = keepCurrent and layoutKey or (Layouts:Resolve(layoutKey) or Layouts.DEFAULT)
     local layout = Layouts:Get(key) or {}
 
     local choices = {
@@ -312,7 +315,7 @@ function Installer:Apply(choices)
     -- Keeping the current setup applies no layout at all: nothing is reset and
     -- no override is written, whatever the reset box says.
     local keepCurrent = choices.layout == Layouts.CURRENT
-    local layoutKey = not keepCurrent and (Layouts:Get(choices.layout) and choices.layout or "standard") or nil
+    local layoutKey = not keepCurrent and (Layouts:Resolve(choices.layout) or Layouts.DEFAULT) or nil
     -- Drawn for the chosen interface size, not as shipped. See Layouts:OverridesFor.
     local overrides = layoutKey and Layouts:OverridesFor(layoutKey, choices.canvas) or {}
 
