@@ -32,19 +32,20 @@ Runs once, on your first login after installing, and never again unless you ask 
 
 1. **What you have.** Every module in the pack, and whether it is running, installed but not enabled at the character screen, or absent. Three different problems needing three different answers.
 2. **Which parts you want.** Everything on by default. Unticking a module switches it off and hands that piece of the interface back to Blizzard — it does not uninstall anything, and each module's own settings turn it back on.
-3. **How it should look.** Three layouts, below.
+3. **How it should look.** Four layouts, below.
 4. **How big it should be.** Four named sizes and a slider, below. Changes as you click, the same way the layouts do.
 5. **How the bars look.** Class colours or flat black, and which bar texture. Below.
 6. **Graphics.** A baseline preset, and a plan for switching between presets by content. The one screen that changes the game rather than the interface, so it gets a screen of its own and an explicit yes.
 7. **A summary you have to agree to.**
 
-### The three layouts
+### The four layouts
 
 | Layout | What it is |
 |---|---|
 | **Traditional** | Your frame in the top-left corner, target beside it, target-of-target beside that — where WoW has put them since 2004. Class colours, power bars, a square minimap like every other layout. Styled rather than reproduced: the positions are Blizzard's, the flat bars and the house font are the pack's. |
 | **Modern** | A pair of frames low either side of centre, above your action bars, the way retail's Edit Mode arranges it out of the box. Everything the game would have shown you — class colours, power bars, health as a number and a percentage. |
 | **Peavers UI** | The author's own interface, transcribed from a live install. Four frames in a row low on the screen, health bars painted flat black with the class colour thrown away, no power bars, almost no auras. One question, answered fast. |
+| **Inset** | Peavers UI with the minimap, chat and tooltips pulled 50 units in from the sides, so the interface reads as a border drawn around the game rather than four things stuck to the edges of the monitor. |
 
 Traditional is the only one placed from a screen *corner* rather than from the centre, and it has to be. Unit frame positions are offsets from the middle of the screen, but half a screen is 960 UI units wide on a 4:3 monitor and 1680 on a 21:9 one — so a "top-left" frame written as a centre offset is in the corner on one monitor and floating near the middle of the screen on another. The installer works the offset out against the screen it is actually running on, then writes an ordinary position that Edit Mode can still move.
 
@@ -205,7 +206,7 @@ The layout data is checked too: every key any layout writes has to be a setting 
 - Nothing is written until the final screen, so backing out changes nothing
 - Click a layout and your interface becomes it on the spot - no screenshots, no mockups, your own screen
 - Every layout you try is undone exactly if you back out, with the undo written to disk first in case the game crashes
-- Three layouts — Traditional (frames top-left, the way WoW has always laid them out), Modern (low and centred, the way Edit Mode does) and Peavers UI (the author's own)
+- Four layouts — Traditional (frames top-left, the way WoW has always laid them out), Modern (low and centred, the way Edit Mode does) and Peavers UI (the author's own), plus Inset: the same as Peavers UI held off the edges of the screen
 - Class colours or flat bars, and any bar texture the client has, asked once rather than decided by the layout you picked
 - An interface size per install — four named sizes and a 70-200% slider — with the layout re-derived for it rather than zoomed, and a suggestion made from the screen you are on
 - Backing out of the size screen is free too: it previews like a layout and undoes like one

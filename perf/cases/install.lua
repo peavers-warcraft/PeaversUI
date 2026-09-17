@@ -734,6 +734,68 @@ assert(Layouts:RecommendedCanvas() == Layouts.CANVAS_HEIGHT,
     "with no GetPhysicalScreenSize the suggestion must be the canvas as drawn")
 
 --------------------------------------------------------------------------------
+-- Inset is Peavers UI, held off the edges
+--
+-- It is derived from Peavers UI rather than transcribed, so the assertions are
+-- about what that derivation must and must not touch: the margin reaches
+-- everything anchored to a screen edge, nothing else moves at all, and - the one
+-- that would really bite - the other layouts are unharmed.
+--
+-- That last one is not hypothetical. Chat and tooltip are shared by reference
+-- between every layout, so a shallow copy here would inset the chat window in
+-- Traditional and Modern as well, from a change whose name says Peavers UI.
+--------------------------------------------------------------------------------
+
+local INSET = 50
+
+local peaversOut = Layouts:OverridesFor("peavers")
+local insetOut = Layouts:OverridesFor("inset")
+
+-- The margin reached everything with an edge to be held off.
+assert(insetOut.minimap.offsetX == INSET and insetOut.minimap.offsetY == INSET,
+    "the minimap was not inset")
+assert(insetOut.chat.chatX == INSET and insetOut.chat.chatY == INSET,
+    "the chat window was not inset")
+assert(insetOut.tooltip.anchorX == -INSET,
+    "the tooltip was not inset off the right edge, got " .. tostring(insetOut.tooltip.anchorX))
+
+-- And the system bars came with the map, because they are docked to it rather
+-- than listed: the dock runs after the inset and reads the offsets it set.
+local map, bars = insetOut.minimap, insetOut.systembars
+assert(bars.frameX == -map.offsetX * map.scale,
+    "the system bars did not follow the minimap inward, got " .. tostring(bars.frameX))
+assert(bars.frameY == -(map.offsetY * map.scale + map.size * map.scale),
+    "the system bars are no longer docked under the inset minimap")
+
+-- Nothing placed from the centre of the screen moved. There is no edge for a
+-- unit frame to be held off, so insetting one would be a different layout rather
+-- than the same one with a margin.
+for unit, block in pairs(peaversOut.unitframes.units) do
+    local moved = insetOut.unitframes.units[unit]
+    assert(moved.x == block.x and moved.y == block.y,
+        "Inset moved the " .. unit .. " frame; only edge-anchored things take the margin")
+    assert(moved.width == block.width and moved.healthColorMode == block.healthColorMode,
+        "Inset changed the " .. unit .. " frame beyond its position")
+end
+
+-- The arrangement really is Peavers UI otherwise: the cast bars are a good probe
+-- because the derivation never mentions them.
+assert(insetOut.castbar.units.player.frameY == peaversOut.castbar.units.player.frameY,
+    "Inset should carry Peavers UI's cast bars unchanged")
+
+-- The other layouts are untouched. Chat and tooltip are shared by reference, so
+-- this is the assertion that catches a shallow copy.
+for _, key in ipairs({ "peavers", "traditional", "modern" }) do
+    local other = Layouts:OverridesFor(key)
+    assert(other.chat.chatX == 0,
+        key .. " had its chat window inset by a change that belongs to Inset alone")
+    assert(other.tooltip.anchorX == 0,
+        key .. " had its tooltip inset by a change that belongs to Inset alone")
+    assert(other.minimap.offsetX == 0,
+        key .. " had its minimap inset by a change that belongs to Inset alone")
+end
+
+--------------------------------------------------------------------------------
 -- Frames placed from a screen corner
 --
 -- The reason this exists at all: a centre offset is a fixed distance from the
