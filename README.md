@@ -33,8 +33,8 @@ Runs once, on your first login after installing, and never again unless you ask 
 1. **What you have.** Every module in the pack, and whether it is running, installed but not enabled at the character screen, or absent. Three different problems needing three different answers.
 2. **Which parts you want.** Everything on by default. Unticking a module switches it off and hands that piece of the interface back to Blizzard — it does not uninstall anything, and each module's own settings turn it back on.
 3. **How it should look.** Three layouts, below.
-4. **How the bars look.** Class colours or flat black, and which bar texture. Below.
-5. **How big it should be.** Four named sizes and a slider, below. Changes as you click, the same way the layouts do.
+4. **How big it should be.** Four named sizes and a slider, below. Changes as you click, the same way the layouts do.
+5. **How the bars look.** Class colours or flat black, and which bar texture. Below.
 6. **Graphics.** A baseline preset, and a plan for switching between presets by content. The one screen that changes the game rather than the interface, so it gets a screen of its own and an explicit yes.
 7. **A summary you have to agree to.**
 
@@ -50,16 +50,6 @@ Traditional is the only one placed from a screen *corner* rather than from the c
 
 Compact, Cinematic and Raid have been retired. They were three more variations on one idea — frames low and centred, drawn tighter or looser — which made the layout screen a set of near-misses rather than a choice. If you are installed on one of them, nothing on your screen changes: the pack points you at the nearest survivor, pins you so no update can rewrite anything, and says so once in chat.
 
-### How the bars look
-
-Two things the layouts used to decide for you, on a screen of their own because they are genuinely separate questions: where the frames sit has nothing to do with what colour they are painted.
-
-**Health bars** are either **class colours** — the bar carries the class of whoever is in it, the way the game does — or **flat black**, where the only thing a bar tells you is how full it is. Each layout still states one, and the installer preselects it and marks it on the card, but it is a starting point rather than a rule. "Peavers UI, but I can still see class colours" was not a thing you could ask for before.
-
-**Bar texture** is whatever this client has: the two fills PeaversCommons ships, Blizzard's own, and anything LibSharedMedia or Details has registered. No layout ever names one — a UI pack that shipped a path into somebody else's addon would draw as nothing for everyone who does not have it — so the default is the collection's own, and picking another is your choice on your machine.
-
-Both change as you click, the same way the layouts do. And both are ordinary settings afterwards: every module keeps a page in `/peavers` with its own colours and textures on it. If you pick wrong here you change it there, rather than running the installer again.
-
 ### Interface size
 
 Every layout is positioned on a canvas 1440 UI units tall, and the pack asks PeaversScaler to hold that canvas so the same coordinates land in the same place on a 1080p screen, a 4K one or an ultrawide. That is the right trade on a monitor and the wrong one on a laptop, where it means the whole interface is drawn at three quarters of its native size on a screen that was already small.
@@ -69,6 +59,16 @@ So the canvas is a choice. **Smaller** (80%), **As drawn** (100%), **Laptop** (1
 Choosing a size re-derives the layout rather than just zooming it. Every position scales with the canvas, so the unit frames stay the same fraction of the way down the screen; every width, height and font size is left alone, so a shorter canvas draws them larger. That is what makes 133% mean *bigger* rather than *the same thing again*.
 
 The scale is pinned as a fixed number rather than a mode that follows your monitor, because the positions are written for one canvas height at install time — and a canvas that moved out from under them afterwards is exactly the "all out of place on my second PC" problem the fixed canvas exists to prevent.
+
+### How the bars look
+
+Two things the layouts used to decide for you, on a screen of their own because they are genuinely separate questions: where the frames sit has nothing to do with what colour they are painted.
+
+**Health bars** are either **class colours** — the bar carries the class of whoever is in it, the way the game does — or **flat black**, where the only thing a bar tells you is how full it is. Each layout still states one, and the installer preselects it and marks it on the card, but it is a starting point rather than a rule. "Peavers UI, but I can still see class colours" was not a thing you could ask for before.
+
+**Bar texture** is whatever this client has: the two fills PeaversCommons ships, Blizzard's own, and anything LibSharedMedia or Details has registered. No layout ever names one — a UI pack that shipped a path into somebody else's addon would draw as nothing for everyone who does not have it — so the default is the collection's own, and picking another is your choice on your machine.
+
+Both change as you click, the same way the layouts do. And both are ordinary settings afterwards: every module keeps a page in `/peavers` with its own colours and textures on it. If you pick wrong here you change it there, rather than running the installer again.
 
 ### Running it again
 

@@ -2,10 +2,24 @@
 -- PeaversUI wizard steps
 --
 -- Seven pages, in order: what you have, what you want, how it should look, how
--- the bars are painted, how big it should be, what to do about graphics, and a
+-- big it should be, how the bars are painted, what to do about graphics, and a
 -- summary you have to agree to before anything is written. Each is a table with
 -- a title, a Build(page, choices), and optionally an OnNext that can take the
 -- footer click for itself.
+--
+-- The three look-and-feel screens run coarsest first: the arrangement, then the
+-- size, then the colour. Size before colour because size decides whether you can
+-- read the thing at all and colour is a detail on top of that - judging a shade
+-- of black on an interface that is still too small to read is the wrong order to
+-- ask two questions in.
+--
+-- Size is deliberately NOT first, or before the layout, though it is the screen
+-- most likely to be wrong on a laptop. Two reasons. A first install already
+-- preselects the right size for the screen before anything is drawn (see
+-- Wizard:Show), so the layout screen previews at a sensible size without being
+-- asked. And the size screen previews by applying the layout at that size, which
+-- there is no way to do before the player has said whether they want a layout at
+-- all - "Keep my current setup" is one of the answers on the screen before it.
 --
 -- The shape of the whole thing follows one rule: nothing is applied until the
 -- last step. Ticking boxes and picking layouts only edits the `choices` table,
@@ -516,153 +530,7 @@ Steps.list.layout = {
 }
 
 --------------------------------------------------------------------------------
--- 4. Bars
---
--- Colour and texture, lifted out of the layouts because they were never really
--- part of one. Where the frames sit and what colour they are painted are
--- independent questions, and the layouts were answering both - which made
--- "Peavers UI, but I can still see class colours" a thing nobody could ask for.
---
--- It is also the screen that says the quiet part out loud: none of this is
--- permanent. Everything the pack writes is an ordinary setting in a module's own
--- page, and people who do not know that treat an installer as a one-way door and
--- pick nothing rather than pick wrong.
---------------------------------------------------------------------------------
-
-Steps.list.bars = {
-    title = "How the bars look",
-    subtitle = "Two things the layouts used to decide for you. Both change as you " ..
-               "click, and both are ordinary settings afterwards - nothing here " ..
-               "is a decision you are stuck with.",
-
-    Build = function(self, page, choices)
-        local width = PUI.Wizard:ContentWidth()
-
-        if self.timer then
-            self.timer:Cancel()
-            self.timer = nil
-        end
-
-        -- Keeping your own setup writes no bars, so there is nothing to paint.
-        if choices.layout == Layouts.CURRENT then
-            local note = Paragraph(page,
-                "You are keeping your own setup, so the pack is not styling any bars - " ..
-                "your colours and textures stay exactly as you have them.\n\n" ..
-                "Each module's own settings page still has both, if you want to change " ..
-                "them without taking a layout.", width)
-            note:SetPoint("TOPLEFT", 0, -4)
-            return
-        end
-
-        choices.style = choices.style or {}
-        local style = choices.style
-        local status
-
-        local ApplySoon = Settle(self, choices, function() return status end, function()
-            local colour = style.colour == "flat" and "Flat black" or "Class colours"
-            return "On screen now: " .. colour .. ". Hide the installer to see it properly."
-        end)
-
-        ------------------------------------------------------------------------
-        -- Colour
-        ------------------------------------------------------------------------
-        local rows = {}
-        local suggested = Layouts:ColourOf(choices.layout)
-
-        local function SelectColour(key, applyIt)
-            style.colour = key
-            choices.styleTouched = true
-            for rowKey, row in pairs(rows) do
-                row:SetSelected(rowKey == key)
-            end
-            if applyIt then ApplySoon() end
-        end
-
-        local y = Style.Section(page, "Health bars", 0, width)
-
-        for _, colour in ipairs(Layouts.colours) do
-            local row, nextY = ChoiceRow(page, y, width, {
-                title = colour.label,
-                -- Marked, not forced. The layout still has an opinion and it is
-                -- worth knowing which, but it is only a starting point.
-                tagline = colour.key == suggested and "what this layout uses" or nil,
-                blurb = colour.blurb,
-                onClick = function() SelectColour(colour.key, true) end,
-            })
-            rows[colour.key] = row
-            y = nextY
-        end
-
-        ------------------------------------------------------------------------
-        -- Texture
-        --
-        -- A dropdown rather than rows: the list is whatever this client has, and
-        -- with LibSharedMedia or Details installed that is dozens of entries.
-        ------------------------------------------------------------------------
-        y = Style.Section(page, "Bar texture", y, width)
-
-        local options = { { value = "", label = "The pack's own" } }
-        local textures = PeaversCommons.ConfigManager
-            and PeaversCommons.ConfigManager.GetBarTextures
-            and PeaversCommons.ConfigManager.GetBarTextures() or {}
-        for path, name in pairs(textures) do
-            options[#options + 1] = { value = path, label = name }
-        end
-        table.sort(options, function(a, b)
-            -- The pack's own stays first; everything else is alphabetical.
-            if a.value == "" then return true end
-            if b.value == "" then return false end
-            return a.label < b.label
-        end)
-
-        local dropdown = W:CreateDropdown(page, "Texture", {
-            width = math.min(320, width),
-            selected = style.texture or "",
-            options = options,
-            onChange = function(value)
-                -- "" is the sentinel for "leave it to the collection": a dropdown
-                -- cannot carry nil, and nil is the value the module wants.
-                style.texture = value ~= "" and value or nil
-                choices.styleTouched = true
-                ApplySoon()
-            end,
-        })
-        dropdown:SetPoint("TOPLEFT", 0, y - 6)
-        y = y - 56
-
-        ------------------------------------------------------------------------
-        -- Getting the window out of the way
-        ------------------------------------------------------------------------
-        local hide = Style.Button(page, "Hide the installer and look", {
-            variant = "secondary",
-            width = 200,
-            onClick = function()
-                PUI.Wizard:EnterPreview(choices.layout)
-            end,
-        })
-        hide:SetPoint("TOPLEFT", 0, y)
-
-        status = Style.Label(page, "", Style.Size.value, Style.Alpha.muted, {
-            width = width - 216,
-            wrap = true,
-        })
-        status:SetPoint("TOPLEFT", 212, y - 4)
-
-        y = y - 46
-
-        local note = Paragraph(page,
-            "Both of these are ordinary settings once the pack is installed. Every " ..
-            "module keeps a page in /peavers with its own colours and textures on it, " ..
-            "and Edit Mode moves anything the layout placed - so if you pick wrong " ..
-            "here, you change it there rather than running the installer again.", width)
-        note:SetPoint("TOPLEFT", 0, y)
-
-        SelectColour(style.colour or suggested, false)
-    end,
-}
-
---------------------------------------------------------------------------------
--- 5. Interface size
+-- 4. Interface size
 --
 -- The layout screen answers what this should look like. This one answers how
 -- big, which has a different right answer on every machine and was the one thing
@@ -876,6 +744,151 @@ Steps.list.size = {
                 ". Hide the installer to see it properly.")
             Style.Text(status, Style.Size.value, Style.Alpha.secondary)
         end
+    end,
+}
+--------------------------------------------------------------------------------
+-- 5. Bars
+--
+-- Colour and texture, lifted out of the layouts because they were never really
+-- part of one. Where the frames sit and what colour they are painted are
+-- independent questions, and the layouts were answering both - which made
+-- "Peavers UI, but I can still see class colours" a thing nobody could ask for.
+--
+-- It is also the screen that says the quiet part out loud: none of this is
+-- permanent. Everything the pack writes is an ordinary setting in a module's own
+-- page, and people who do not know that treat an installer as a one-way door and
+-- pick nothing rather than pick wrong.
+--------------------------------------------------------------------------------
+
+Steps.list.bars = {
+    title = "How the bars look",
+    subtitle = "Two things the layouts used to decide for you. Both change as you " ..
+               "click, and both are ordinary settings afterwards - nothing here " ..
+               "is a decision you are stuck with.",
+
+    Build = function(self, page, choices)
+        local width = PUI.Wizard:ContentWidth()
+
+        if self.timer then
+            self.timer:Cancel()
+            self.timer = nil
+        end
+
+        -- Keeping your own setup writes no bars, so there is nothing to paint.
+        if choices.layout == Layouts.CURRENT then
+            local note = Paragraph(page,
+                "You are keeping your own setup, so the pack is not styling any bars - " ..
+                "your colours and textures stay exactly as you have them.\n\n" ..
+                "Each module's own settings page still has both, if you want to change " ..
+                "them without taking a layout.", width)
+            note:SetPoint("TOPLEFT", 0, -4)
+            return
+        end
+
+        choices.style = choices.style or {}
+        local style = choices.style
+        local status
+
+        local ApplySoon = Settle(self, choices, function() return status end, function()
+            local colour = style.colour == "flat" and "Flat black" or "Class colours"
+            return "On screen now: " .. colour .. ". Hide the installer to see it properly."
+        end)
+
+        ------------------------------------------------------------------------
+        -- Colour
+        ------------------------------------------------------------------------
+        local rows = {}
+        local suggested = Layouts:ColourOf(choices.layout)
+
+        local function SelectColour(key, applyIt)
+            style.colour = key
+            choices.styleTouched = true
+            for rowKey, row in pairs(rows) do
+                row:SetSelected(rowKey == key)
+            end
+            if applyIt then ApplySoon() end
+        end
+
+        local y = Style.Section(page, "Health bars", 0, width)
+
+        for _, colour in ipairs(Layouts.colours) do
+            local row, nextY = ChoiceRow(page, y, width, {
+                title = colour.label,
+                -- Marked, not forced. The layout still has an opinion and it is
+                -- worth knowing which, but it is only a starting point.
+                tagline = colour.key == suggested and "what this layout uses" or nil,
+                blurb = colour.blurb,
+                onClick = function() SelectColour(colour.key, true) end,
+            })
+            rows[colour.key] = row
+            y = nextY
+        end
+
+        ------------------------------------------------------------------------
+        -- Texture
+        --
+        -- A dropdown rather than rows: the list is whatever this client has, and
+        -- with LibSharedMedia or Details installed that is dozens of entries.
+        ------------------------------------------------------------------------
+        y = Style.Section(page, "Bar texture", y, width)
+
+        local options = { { value = "", label = "The pack's own" } }
+        local textures = PeaversCommons.ConfigManager
+            and PeaversCommons.ConfigManager.GetBarTextures
+            and PeaversCommons.ConfigManager.GetBarTextures() or {}
+        for path, name in pairs(textures) do
+            options[#options + 1] = { value = path, label = name }
+        end
+        table.sort(options, function(a, b)
+            -- The pack's own stays first; everything else is alphabetical.
+            if a.value == "" then return true end
+            if b.value == "" then return false end
+            return a.label < b.label
+        end)
+
+        local dropdown = W:CreateDropdown(page, "Texture", {
+            width = math.min(320, width),
+            selected = style.texture or "",
+            options = options,
+            onChange = function(value)
+                -- "" is the sentinel for "leave it to the collection": a dropdown
+                -- cannot carry nil, and nil is the value the module wants.
+                style.texture = value ~= "" and value or nil
+                choices.styleTouched = true
+                ApplySoon()
+            end,
+        })
+        dropdown:SetPoint("TOPLEFT", 0, y - 6)
+        y = y - 56
+
+        ------------------------------------------------------------------------
+        -- Getting the window out of the way
+        ------------------------------------------------------------------------
+        local hide = Style.Button(page, "Hide the installer and look", {
+            variant = "secondary",
+            width = 200,
+            onClick = function()
+                PUI.Wizard:EnterPreview(choices.layout)
+            end,
+        })
+        hide:SetPoint("TOPLEFT", 0, y)
+
+        status = Style.Label(page, "", Style.Size.value, Style.Alpha.muted, {
+            width = width - 216,
+            wrap = true,
+        })
+        status:SetPoint("TOPLEFT", 212, y - 4)
+
+        y = y - 46
+
+        local note = Paragraph(page,
+            "Both of these are ordinary settings once the pack is installed. Every " ..
+            "module keeps a page in /peavers with its own colours and textures on it, " ..
+            "and Edit Mode moves anything the layout placed - so if you pick wrong " ..
+            "here, you change it there rather than running the installer again.", width)
+        note:SetPoint("TOPLEFT", 0, y)
+
+        SelectColour(style.colour or suggested, false)
     end,
 }
 
@@ -1232,7 +1245,7 @@ Steps.list.review = {
 
 -- The footer counts these to say "step 3 of 7", so this is also the length of
 -- the wizard.
-Steps.order = { "welcome", "modules", "layout", "bars", "size", "graphics", "review" }
+Steps.order = { "welcome", "modules", "layout", "size", "bars", "graphics", "review" }
 
 -- The review step carries its own result between renders, which would otherwise
 -- survive into the next run and show a stale report. Cleared whenever the
