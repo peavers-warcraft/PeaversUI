@@ -22,7 +22,7 @@ That last one is the important one. Skinning Blizzard's frames means reaching in
 The gaps are deliberate, and there is excellent work filling them:
 
 - **Action bars:** [Bartender4](https://www.curseforge.com/wow/addons/bartender4). It has done this job properly for fifteen years and there is nothing to add.
-- **Party and raid frames:** DandersFrames. Group frames are where healing decisions get made, and they deserve a specialist. This one is a pleasure to heal with.
+- **Party and raid frames:** [Danders Frames](https://www.curseforge.com/wow/addons/danders-frames). Click casting, aura tracking and automatic raid layouts, for every role rather than just healers. Group frames are what you read to know who is about to die, whoever you are playing, and they deserve a specialist.
 
 The installer's **More stuff** page lists these and others, tells you which you already have, and can hand you a settings string to paste into that addon's own import box. It never writes into another addon's saved variables.
 

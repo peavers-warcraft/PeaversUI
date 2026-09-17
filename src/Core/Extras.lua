@@ -81,17 +81,20 @@ Extras.list = {
     ----------------------------------------------------------------------------
     {
         key = "dandersframes",
-        name = "DandersFrames",
+        -- Spelled as its author spells it on CurseForge. The folder is one word
+        -- and stays that way; that is what the client looks for.
+        name = "Danders Frames",
         folders = { "DandersFrames" },
         category = "frames",
-        blurb = "Raid and party frames.",
+        blurb = "Party and raid frames, with click casting and aura tracking.",
         why = "The one piece of the interface this pack deliberately does not " ..
-              "replace. Group frames are where healing decisions get made and " ..
-              "they deserve a specialist.",
-        -- Address not confirmed; naming it rather than guessing a slug.
-        url = nil,
+              "replace. Group frames are what you read to know who is about to " ..
+              "die, whoever you are and whatever you are playing, and they " ..
+              "deserve a specialist.",
+        -- The slug is hyphenated, which is why it went unlinked for a while.
+        url = CURSE .. "danders-frames",
         profile = {
-            how = "DandersFrames options - Profiles - Import.",
+            how = "Danders Frames options - Profiles - Import.",
             text = nil,
         },
     },
