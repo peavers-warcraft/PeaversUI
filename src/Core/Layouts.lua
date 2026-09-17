@@ -1,8 +1,9 @@
 --------------------------------------------------------------------------------
 -- PeaversUI layouts
 --
--- Pure data: three complete looks, each one a set of overrides written into the
--- module addons' own configs. There is no code here on purpose. A layout is
+-- Pure data: three complete looks and a variation on one of them, each a set of
+-- overrides written into the module addons' own configs. There is no code here
+-- on purpose, beyond deriving one layout from another. A layout is
 -- something a person should be able to read, disagree with, and change by
 -- editing a number - not a function that has to be traced through.
 --
@@ -53,7 +54,9 @@ PUI.Layouts = Layouts
 -- Familiar first, then the one most people arrive at on their own, then the
 -- author's. Somebody opening this screen for the first time should meet the
 -- arrangement they already know before they meet anybody's taste.
-Layouts.order = { "traditional", "modern", "peavers" }
+-- Inset last, beside the layout it is a variation of: somebody who has just read
+-- the Peavers UI card is the one it will mean something to.
+Layouts.order = { "traditional", "modern", "peavers", "inset" }
 
 -- What a fresh account starts on, and what anything handed an unusable key falls
 -- back to. The pack's own layout rather than the first card: somebody who went
@@ -93,6 +96,18 @@ Layouts.retired = {
 Layouts.renamed = {
     standard = true,
 }
+
+-- Defined up here rather than beside the size arithmetic that also uses it,
+-- because Inset is derived from Peavers UI the moment the list closes and a
+-- local only exists for the code written after it.
+local function DeepCopy(value)
+    if type(value) ~= "table" then return value end
+    local out = {}
+    for key, inner in pairs(value) do out[key] = DeepCopy(inner) end
+    return out
+end
+
+Layouts.DeepCopy = DeepCopy
 
 --- The living key an account's stored layout refers to.
 --- @param key string|nil
@@ -872,6 +887,74 @@ Layouts.list = {
 }
 
 --------------------------------------------------------------------------------
+-- Inset
+--
+-- Peavers UI, held off the edges of the screen.
+--
+-- Everything the pack puts in a corner - the minimap, the chat window, the
+-- parked tooltip - normally sits flush against the edge it belongs to. Pulling
+-- all of them the same distance inward turns the gap into a deliberate margin:
+-- the interface reads as a frame drawn around the game rather than as four
+-- things stuck to the sides of the monitor. It is the layout for somebody
+-- playing full screen who wants the world to have an edge.
+--
+-- Derived rather than transcribed. The arrangement IS Peavers UI - unit frames,
+-- flat black bars, the lot - and writing it out again would be two hundred lines
+-- of duplication waiting to disagree with the original. So it is a deep copy
+-- with four numbers changed, and any future change to Peavers UI arrives here
+-- for free.
+--
+-- Deep copy specifically, not a shallow one: the chat and tooltip blocks are
+-- shared by reference between every layout (see the house style above), and
+-- editing them in place would inset the chat window in Traditional and Modern
+-- too.
+--
+-- Only the edge-anchored things move. The unit frames and cast bars are placed
+-- from the centre of the screen and have no edge to be held off - insetting them
+-- would just be a different layout, not the same one with a margin.
+--
+-- The system bars are not listed and do not need to be: they are docked to the
+-- minimap by the loop below, which runs after this and reads the offsets set
+-- here, so they follow the map inward on their own.
+--------------------------------------------------------------------------------
+
+-- One number, so the margin is even by construction rather than by four values
+-- that have to be kept equal. In UI units on the 1440 canvas, and scaled with
+-- the canvas like every other position - at 133% the margin is the same fraction
+-- of the screen, which is what keeps it reading as a border.
+local INSET = 50
+
+do
+    local peavers = Layouts.list.peavers
+    local overrides = DeepCopy(peavers.overrides)
+
+    -- Positive magnitudes, inward from whichever corner the map is anchored to:
+    -- PeaversMiniMap applies the direction itself from `anchor`.
+    overrides.minimap.offsetX = INSET
+    overrides.minimap.offsetY = INSET
+
+    -- Raw offsets from BOTTOMLEFT, so both are positive to move right and up.
+    overrides.chat.chatX = INSET
+    overrides.chat.chatY = INSET
+
+    -- Raw offsets from BOTTOMRIGHT, so x is negative to move left off the right
+    -- edge. y is left alone: the tooltip is parked well above the bottom of the
+    -- screen already and never touched that edge to be held off it.
+    overrides.tooltip.anchorX = -INSET
+
+    Layouts.list.inset = {
+        name = "Inset",
+        tagline = "The same, held off the edges",
+        blurb = "Peavers UI with the minimap, chat and tooltips pulled " .. INSET ..
+                " units in from the sides of the screen, so the interface reads as a " ..
+                "border around the game rather than four things stuck to the edges.",
+        graphics = peavers.graphics,
+        autoSwitch = DeepCopy(peavers.autoSwitch),
+        overrides = overrides,
+    }
+end
+
+--------------------------------------------------------------------------------
 -- System bars dock to the minimap
 --
 -- The one piece of arithmetic in this file, and the reason it is arithmetic
@@ -1250,15 +1333,6 @@ local POSITIONAL = {
     -- bars at every size but the one they were docked at.
 }
 
-local function DeepCopy(value)
-    if type(value) ~= "table" then return value end
-    local out = {}
-    for key, inner in pairs(value) do out[key] = DeepCopy(inner) end
-    return out
-end
-
-Layouts.DeepCopy = DeepCopy
-
 -- Walk `block` against a spec from POSITIONAL, multiplying what the spec names.
 local function ScalePositions(block, spec, factor)
     if type(block) ~= "table" or type(spec) ~= "table" then return end
@@ -1362,6 +1436,7 @@ Layouts.changelog = {
     },
     traditional = { [1] = "First release." },
     modern      = { [1] = "First release." },
+    inset       = { [1] = "First release." },
 }
 
 for key, layout in pairs(Layouts.list) do
