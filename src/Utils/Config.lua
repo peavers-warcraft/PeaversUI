@@ -31,8 +31,21 @@ local PUI_DEFAULTS = {
     -- currently applied, and so re-opening the wizard starts where you left off
     -- rather than back at the factory defaults. "current" means the player kept
     -- their own setup rather than taking a layout.
-    layout = "standard",
+    layout = "peavers",
     graphicsPreset = "none",
+
+    -- How the bars are painted, from the installer's bars screen. Kept apart
+    -- from the layout because they are independent questions: any colour goes
+    -- with any arrangement. nil for either means "whatever the layout says" and
+    -- "the collection's own texture" respectively.
+    barColour = nil,
+    barTexture = nil,
+
+    -- The canvas height, in UI units, the layout was drawn for - the installer's
+    -- interface size question. nil means never asked, which everything reads as
+    -- Layouts.CANVAS_HEIGHT: an install made before sizes existed is at the size
+    -- the pack was drawn at, and must stay there until somebody says otherwise.
+    canvas = nil,
 
     -- The revision of `layout` that was applied, and whether pack updates may
     -- apply newer ones. Pinned unless the player chose otherwise, every time.
@@ -42,6 +55,11 @@ local PUI_DEFAULTS = {
     -- false once an install from before revisions existed has been migrated,
     -- true once the player has been told about pinning. nil for everybody else.
     versioningNoticeShown = nil,
+
+    -- The retired layout key this account was moved off, until it has been told
+    -- once at login. nil for everybody who was never moved. See
+    -- Versioning:MigrateRetired.
+    retiredFrom = nil,
 
     -- The undo for the last layout update applied at login, in the same shape as
     -- previewRestore. Kept until the next update replaces it.
@@ -101,6 +119,15 @@ function PUI.Config:MarkInstalled(choices)
     if choices then
         self.layout = choices.layout or self.layout
         self.graphicsPreset = choices.graphicsPreset or self.graphicsPreset
+        self.canvas = tonumber(choices.canvas) or self.canvas
+
+        if choices.style then
+            self.barColour = choices.style.colour or self.barColour
+            -- Assigned rather than or-ed: nil is a real answer here, meaning the
+            -- collection's own texture, and has to be able to replace a path the
+            -- player set on a previous run.
+            self.barTexture = choices.style.texture
+        end
 
         local layout = PUI.Layouts and PUI.Layouts:Get(self.layout)
         self.layoutRevision = layout and layout.revision or nil

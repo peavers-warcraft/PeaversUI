@@ -1,10 +1,25 @@
 --------------------------------------------------------------------------------
 -- PeaversUI wizard steps
 --
--- Five pages, in order: what you have, what you want, how it should look, what
--- to do about graphics, and a summary you have to agree to before anything is
--- written. Each is a table with a title, a Build(page, choices), and optionally
--- an OnNext that can take the footer click for itself.
+-- Seven pages, in order: what you have, what you want, how it should look, how
+-- big it should be, how the bars are painted, what to do about graphics, and a
+-- summary you have to agree to before anything is written. Each is a table with
+-- a title, a Build(page, choices), and optionally an OnNext that can take the
+-- footer click for itself.
+--
+-- The three look-and-feel screens run coarsest first: the arrangement, then the
+-- size, then the colour. Size before colour because size decides whether you can
+-- read the thing at all and colour is a detail on top of that - judging a shade
+-- of black on an interface that is still too small to read is the wrong order to
+-- ask two questions in.
+--
+-- Size is deliberately NOT first, or before the layout, though it is the screen
+-- most likely to be wrong on a laptop. Two reasons. A first install already
+-- preselects the right size for the screen before anything is drawn (see
+-- Wizard:Show), so the layout screen previews at a sensible size without being
+-- asked. And the size screen previews by applying the layout at that size, which
+-- there is no way to do before the player has said whether they want a layout at
+-- all - "Keep my current setup" is one of the answers on the screen before it.
 --
 -- The shape of the whole thing follows one rule: nothing is applied until the
 -- last step. Ticking boxes and picking layouts only edits the `choices` table,
@@ -185,6 +200,52 @@ local function ChoiceRow(parent, y, width, opts)
     return row, y - height
 end
 
+-- The re-apply settles rather than firing per step: dragging the slider walks
+-- every value in between, and each one would otherwise rewrite six addons'
+-- settings and rebuild their frames. Long enough that a drag settles once;
+-- short enough that a click on a row still feels like the click did it.
+local SIZE_SETTLE = 0.25
+
+--------------------------------------------------------------------------------
+-- Re-applying the layout while you change how it looks
+--
+-- Shared by the two screens that change the live preview rather than a plan -
+-- interface size and bar style. Both answer a question no description settles,
+-- both re-apply the whole layout to answer it, and both have to coalesce: a
+-- slider drag walks every value in between and a run of clicks is a run of
+-- rewrites.
+--
+-- The timer hangs off the step so that rendering it again, or closing the
+-- window, can cancel one that is still in flight - see Steps:CancelPending.
+--------------------------------------------------------------------------------
+-- `getStatus` rather than the label itself: both screens build their status line
+-- below the controls that drive it, so the label does not exist yet at the point
+-- this is set up and a captured value would be nil forever.
+local function Settle(step, choices, getStatus, describe)
+    local function Apply()
+        step.timer = nil
+
+        local ok, reason = PUI.Preview:Start(choices.layout, choices)
+        local status = getStatus()
+        if not status then return end
+
+        if ok then
+            status:SetText(describe())
+            Style.Text(status, Style.Size.value, Style.Alpha.secondary)
+        else
+            -- Combat, almost always. The choice still stands; it just does not
+            -- reach the screen until the fight is over.
+            status:SetText(reason or "Could not change that right now.")
+            Style.Text(status, Style.Size.value, Style.Alpha.primary, C.amber)
+        end
+    end
+
+    return function()
+        if step.timer then step.timer:Cancel() end
+        step.timer = C_Timer.NewTimer(SIZE_SETTLE, Apply)
+    end
+end
+
 --------------------------------------------------------------------------------
 -- 1. Welcome - the roster
 --------------------------------------------------------------------------------
@@ -357,6 +418,15 @@ Steps.list.layout = {
                 choices.autoSwitch = Layouts:AutoSwitchFor(key)
             end
 
+            -- Same rule as the graphics screen: the bar colour follows the
+            -- layout until somebody answers the bars screen themselves, and
+            -- after that their answer survives a change of mind about the
+            -- layout. Texture is never suggested by a layout, so it is never
+            -- overwritten here.
+            if not choices.styleTouched and choices.style then
+                choices.style.colour = Layouts:ColourOf(key)
+            end
+
             -- The one row that puts nothing on screen. Whatever was being
             -- previewed goes back, and that is all.
             if key == Layouts.CURRENT then
@@ -445,7 +515,7 @@ Steps.list.layout = {
         -- highlighted row describing something the player cannot see is the
         -- worst state this screen could be in.
         ------------------------------------------------------------------------
-        local key = choices.layout or "standard"
+        local key = choices.layout or Layouts.DEFAULT
         Select(key, not PUI.Preview:IsShowing(key))
 
         -- Coming back to a layout already on screen: say so, since Select was
@@ -460,7 +530,370 @@ Steps.list.layout = {
 }
 
 --------------------------------------------------------------------------------
--- 4. Graphics
+-- 4. Interface size
+--
+-- The layout screen answers what this should look like. This one answers how
+-- big, which has a different right answer on every machine and was the one thing
+-- the pack decided on everybody's behalf: every layout was drawn on a 1440-unit
+-- canvas and every install got that canvas, which is right on the monitor the
+-- pack was built on and too small to read on a laptop.
+--
+-- Like the layout screen, it applies as you click. "A third larger" means
+-- nothing until it is on your own screen at your own seating distance, so the
+-- rows re-apply the whole layout at the new canvas and the window can stand
+-- aside to let you look.
+--------------------------------------------------------------------------------
+Steps.list.size = {
+    title = "How big should it be",
+    subtitle = "The layouts are drawn at a fixed size so they land in the same place " ..
+               "on any screen - which means the pack needs telling which screen. " ..
+               "This changes as you click, the same way the layouts do.",
+
+    Build = function(self, page, choices)
+        local width = PUI.Wizard:ContentWidth()
+        local scaler = Modules.byKey.scaler
+
+        -- A pending re-apply belongs to the page that scheduled it. Rendering
+        -- this step again - arriving, or coming back - starts a new page, so the
+        -- old timer would write its status line onto a frame nobody can see.
+        if self.timer then
+            self.timer:Cancel()
+            self.timer = nil
+        end
+
+        ------------------------------------------------------------------------
+        -- Nothing being placed
+        --
+        -- "Keep my current setup" writes no positions and no scale, so there is
+        -- no canvas to draw it on and nothing here to ask. A size chooser that
+        -- did nothing would be the only screen in this installer that lied.
+        ------------------------------------------------------------------------
+        if choices.layout == Layouts.CURRENT then
+            local note = Paragraph(page,
+                "You are keeping your own setup, so the pack is not placing anything and " ..
+                "has no reason to change how big it is. Your UI scale is left exactly " ..
+                "where you have it.\n\n" ..
+                "If it is your scale you want to change rather than your layout, " ..
+                "/pscaler does that on its own - presets, a slider and a pixel-perfect " ..
+                "mode - without this installer rewriting anything else.", width)
+            note:SetPoint("TOPLEFT", 0, -4)
+            return
+        end
+
+        ------------------------------------------------------------------------
+        -- Nothing to set it with
+        --
+        -- PeaversScaler is what holds the UI scale; without it the pack can
+        -- place a layout but not size it. Say so rather than offering a chooser
+        -- whose every option does the same nothing.
+        ------------------------------------------------------------------------
+        if not Modules:IsAvailable(scaler) then
+            local note = Paragraph(page,
+                "PeaversScaler is not running, so there is no size to choose: the pack " ..
+                "can move things around your screen but not change how big your screen " ..
+                "is in UI units.\n\n" ..
+                "The layout is placed for the size it was drawn at, which is right if " ..
+                "your UI scale is already there and small if it is not. Install " ..
+                "PeaversScaler and run /pui again, or set Blizzard's own UI scale by " ..
+                "hand and come back.", width)
+            note:SetPoint("TOPLEFT", 0, -4)
+            choices.canvas = Layouts.CANVAS_HEIGHT
+            return
+        end
+
+        local y = 0
+        local status
+
+        ------------------------------------------------------------------------
+        -- Switched off two screens back
+        --
+        -- Still a real question, since the positions are written for a canvas
+        -- either way, but nothing here will set the scale to match - so it is
+        -- said at the top rather than discovered on the summary.
+        ------------------------------------------------------------------------
+        if not choices.modules[scaler.key] then
+            local warn, warnHeight = Paragraph(page,
+                "The Scaler is switched off, so nothing will change your UI scale. The " ..
+                "size below still decides where the layout puts things, so pick the one " ..
+                "matching the scale you already run - or go back a screen and switch the " ..
+                "Scaler on.", width, { color = C.amber, alpha = Style.Alpha.secondary })
+            warn:SetPoint("TOPLEFT", 0, y)
+            y = y - (warnHeight + Style.Pad.section)
+        end
+
+        local rows = {}
+        local slider
+        local sliderEcho = false   -- our own SetValue, not a drag: ignore it
+
+        local recommended = Layouts:RecommendedCanvas()
+
+        local ApplySoon = Settle(self, choices, function() return status end, function()
+            return "On screen now at " .. Layouts:SizeLabel(choices.canvas) ..
+                ". Hide the installer to see it properly."
+        end)
+
+        -- `custom` is the row the slider drives. Clicking a named size moves the
+        -- slider to match; moving the slider lights `custom`, because a value
+        -- between two named sizes is not either of them.
+        local function Select(canvas, applyIt)
+            choices.canvas = canvas
+
+            local named = Layouts:SizeKeyFor(canvas)
+            for rowKey, row in pairs(rows) do
+                row:SetSelected(rowKey == (named or "custom"))
+            end
+
+            if slider then
+                sliderEcho = true
+                slider:SetValue(Layouts:SizeOf(canvas))
+                sliderEcho = false
+            end
+
+            if applyIt then ApplySoon() end
+        end
+
+        ------------------------------------------------------------------------
+        -- The named sizes
+        ------------------------------------------------------------------------
+        y = Style.Section(page, "Size", y, width)
+
+        for _, size in ipairs(Layouts.sizes) do
+            local tagline = Layouts:SizeLabel(size.canvas)
+            -- The suggestion is marked, never pre-selected on a re-run: see
+            -- Wizard:Show. On a first install it is already the selected row,
+            -- and saying so is what explains why.
+            if size.canvas == recommended then
+                tagline = tagline .. " - suggested for your screen"
+            end
+
+            local row, nextY = ChoiceRow(page, y, width, {
+                title = size.label,
+                tagline = tagline,
+                blurb = size.blurb,
+                onClick = function() Select(size.canvas, true) end,
+            })
+            rows[size.key] = row
+            y = nextY
+        end
+
+        -- No blurb: the slider directly underneath is the explanation, and the
+        -- page has exactly one row's worth of height to spare.
+        local customRow, afterCustom = ChoiceRow(page, y, width, {
+            title = "Custom",
+            tagline = "set it by hand with the slider below",
+            onClick = function()
+                if slider then Select(Layouts:CanvasFor(slider:GetValue()), true) end
+            end,
+        })
+        rows.custom = customRow
+        y = afterCustom - Style.Pad.section
+
+        ------------------------------------------------------------------------
+        -- The slider
+        ------------------------------------------------------------------------
+        slider = W:CreateSlider(page, "Interface size", {
+            width = width,
+            min = Layouts.SIZE_MIN,
+            max = Layouts.SIZE_MAX,
+            step = Layouts.SIZE_STEP,
+            value = Layouts:SizeOf(choices.canvas),
+            format = function(value)
+                return math.floor(value * 100 + 0.5) .. "%"
+            end,
+            onChange = function(value)
+                -- SetValue from Select fires this too, and letting it through
+                -- would turn every click on a named row into a custom size two
+                -- decimal places away from it.
+                if sliderEcho then return end
+                Select(Layouts:CanvasFor(value), true)
+            end,
+        })
+        slider:SetPoint("TOPLEFT", 0, y)
+        y = y - (44 + Style.Pad.section)
+
+        ------------------------------------------------------------------------
+        -- Getting the window out of the way
+        ------------------------------------------------------------------------
+        local hide = Style.Button(page, "Hide the installer and look", {
+            variant = "secondary",
+            width = 200,
+            onClick = function()
+                PUI.Wizard:EnterPreview(choices.layout)
+            end,
+        })
+        hide:SetPoint("TOPLEFT", 0, y)
+
+        status = Style.Label(page, "", Style.Size.value, Style.Alpha.muted, {
+            width = width - 216,
+            wrap = true,
+        })
+        status:SetPoint("TOPLEFT", 212, y - 4)
+
+        ------------------------------------------------------------------------
+        -- Arriving on this screen
+        --
+        -- Light the row that matches, and only re-apply when what is on screen
+        -- is not already this layout at this size - which it usually is, having
+        -- come straight from the layout screen.
+        ------------------------------------------------------------------------
+        local canvas = tonumber(choices.canvas) or Layouts.CANVAS_HEIGHT
+        Select(canvas, not PUI.Preview:IsShowing(choices.layout, canvas))
+
+        if PUI.Preview:IsShowing(choices.layout, canvas) then
+            status:SetText("On screen now at " .. Layouts:SizeLabel(canvas) ..
+                ". Hide the installer to see it properly.")
+            Style.Text(status, Style.Size.value, Style.Alpha.secondary)
+        end
+    end,
+}
+--------------------------------------------------------------------------------
+-- 5. Bars
+--
+-- Colour and texture, lifted out of the layouts because they were never really
+-- part of one. Where the frames sit and what colour they are painted are
+-- independent questions, and the layouts were answering both - which made
+-- "Peavers UI, but I can still see class colours" a thing nobody could ask for.
+--
+-- It is also the screen that says the quiet part out loud: none of this is
+-- permanent. Everything the pack writes is an ordinary setting in a module's own
+-- page, and people who do not know that treat an installer as a one-way door and
+-- pick nothing rather than pick wrong.
+--------------------------------------------------------------------------------
+
+Steps.list.bars = {
+    title = "How the bars look",
+    subtitle = "Two things the layouts used to decide for you. Both change as you " ..
+               "click, and both are ordinary settings afterwards - nothing here " ..
+               "is a decision you are stuck with.",
+
+    Build = function(self, page, choices)
+        local width = PUI.Wizard:ContentWidth()
+
+        if self.timer then
+            self.timer:Cancel()
+            self.timer = nil
+        end
+
+        -- Keeping your own setup writes no bars, so there is nothing to paint.
+        if choices.layout == Layouts.CURRENT then
+            local note = Paragraph(page,
+                "You are keeping your own setup, so the pack is not styling any bars - " ..
+                "your colours and textures stay exactly as you have them.\n\n" ..
+                "Each module's own settings page still has both, if you want to change " ..
+                "them without taking a layout.", width)
+            note:SetPoint("TOPLEFT", 0, -4)
+            return
+        end
+
+        choices.style = choices.style or {}
+        local style = choices.style
+        local status
+
+        local ApplySoon = Settle(self, choices, function() return status end, function()
+            local colour = style.colour == "flat" and "Flat black" or "Class colours"
+            return "On screen now: " .. colour .. ". Hide the installer to see it properly."
+        end)
+
+        ------------------------------------------------------------------------
+        -- Colour
+        ------------------------------------------------------------------------
+        local rows = {}
+        local suggested = Layouts:ColourOf(choices.layout)
+
+        local function SelectColour(key, applyIt)
+            style.colour = key
+            choices.styleTouched = true
+            for rowKey, row in pairs(rows) do
+                row:SetSelected(rowKey == key)
+            end
+            if applyIt then ApplySoon() end
+        end
+
+        local y = Style.Section(page, "Health bars", 0, width)
+
+        for _, colour in ipairs(Layouts.colours) do
+            local row, nextY = ChoiceRow(page, y, width, {
+                title = colour.label,
+                -- Marked, not forced. The layout still has an opinion and it is
+                -- worth knowing which, but it is only a starting point.
+                tagline = colour.key == suggested and "what this layout uses" or nil,
+                blurb = colour.blurb,
+                onClick = function() SelectColour(colour.key, true) end,
+            })
+            rows[colour.key] = row
+            y = nextY
+        end
+
+        ------------------------------------------------------------------------
+        -- Texture
+        --
+        -- A dropdown rather than rows: the list is whatever this client has, and
+        -- with LibSharedMedia or Details installed that is dozens of entries.
+        ------------------------------------------------------------------------
+        y = Style.Section(page, "Bar texture", y, width)
+
+        local options = { { value = "", label = "The pack's own" } }
+        local textures = PeaversCommons.ConfigManager
+            and PeaversCommons.ConfigManager.GetBarTextures
+            and PeaversCommons.ConfigManager.GetBarTextures() or {}
+        for path, name in pairs(textures) do
+            options[#options + 1] = { value = path, label = name }
+        end
+        table.sort(options, function(a, b)
+            -- The pack's own stays first; everything else is alphabetical.
+            if a.value == "" then return true end
+            if b.value == "" then return false end
+            return a.label < b.label
+        end)
+
+        local dropdown = W:CreateDropdown(page, "Texture", {
+            width = math.min(320, width),
+            selected = style.texture or "",
+            options = options,
+            onChange = function(value)
+                -- "" is the sentinel for "leave it to the collection": a dropdown
+                -- cannot carry nil, and nil is the value the module wants.
+                style.texture = value ~= "" and value or nil
+                choices.styleTouched = true
+                ApplySoon()
+            end,
+        })
+        dropdown:SetPoint("TOPLEFT", 0, y - 6)
+        y = y - 56
+
+        ------------------------------------------------------------------------
+        -- Getting the window out of the way
+        ------------------------------------------------------------------------
+        local hide = Style.Button(page, "Hide the installer and look", {
+            variant = "secondary",
+            width = 200,
+            onClick = function()
+                PUI.Wizard:EnterPreview(choices.layout)
+            end,
+        })
+        hide:SetPoint("TOPLEFT", 0, y)
+
+        status = Style.Label(page, "", Style.Size.value, Style.Alpha.muted, {
+            width = width - 216,
+            wrap = true,
+        })
+        status:SetPoint("TOPLEFT", 212, y - 4)
+
+        y = y - 46
+
+        local note = Paragraph(page,
+            "Both of these are ordinary settings once the pack is installed. Every " ..
+            "module keeps a page in /peavers with its own colours and textures on it, " ..
+            "and Edit Mode moves anything the layout placed - so if you pick wrong " ..
+            "here, you change it there rather than running the installer again.", width)
+        note:SetPoint("TOPLEFT", 0, y)
+
+        SelectColour(style.colour or suggested, false)
+    end,
+}
+
+--------------------------------------------------------------------------------
+-- 6. Graphics
 --------------------------------------------------------------------------------
 
 Steps.list.graphics = {
@@ -625,7 +1058,7 @@ Steps.list.graphics = {
 }
 
 --------------------------------------------------------------------------------
--- 5. Review, then done
+-- 7. Review, then done
 --
 -- One step wearing two faces. Keeping the result on the same page as the plan
 -- is deliberate: the summary you agreed to and the report of what happened line
@@ -701,16 +1134,16 @@ Steps.list.review = {
 
         y = y - Style.Pad.gap
 
-        local previewNote = PUI.Preview:IsActive()
-            and "The layout you previewed is on screen now; installing keeps it. "
-            or ""
-
+        -- One line, not four. The page it sits at the bottom of is the longest in
+        -- the installer, and most of what this used to say - that the pack only
+        -- ever writes ordinary settings, and where to change them - is said
+        -- again, with room to say it properly, on the screen after this one.
         local note = Paragraph(page,
-            previewNote ..
-            "Everything written here lands in each module's own saved settings, " ..
-            "which are the same ones Edit Mode edits - so anything the pack sets " ..
-            "can be changed there afterwards. Run the installer again from /pui " ..
-            "at any time to start over.", width)
+            (PUI.Preview:IsActive()
+                and "The layout you previewed is on screen now; installing keeps it. "
+                or "") ..
+            "Everything here lands in the modules' own settings, and /pui starts over.",
+            width)
         note:SetPoint("TOPLEFT", 0, y)
     end,
 
@@ -810,15 +1243,34 @@ Steps.list.review = {
     end,
 }
 
--- The footer counts these to say "step 3 of 5", so this is also the length of
+-- The footer counts these to say "step 3 of 7", so this is also the length of
 -- the wizard.
-Steps.order = { "welcome", "modules", "layout", "graphics", "review" }
+Steps.order = { "welcome", "modules", "layout", "size", "bars", "graphics", "review" }
 
 -- The review step carries its own result between renders, which would otherwise
 -- survive into the next run and show a stale report. Cleared whenever the
 -- wizard opens.
+--
+-- The size step's pending re-apply goes with it: a timer left running from a
+-- closed wizard would write a layout onto the screen of somebody who had already
+-- walked away from the question.
 function Steps:Reset()
     self.list.review.result = nil
+    self:CancelPending()
+end
+
+-- Drop any re-apply the size step still has in flight. Called when the wizard
+-- opens and again when it closes: closing reverts the preview, and a timer that
+-- survived it would put the layout straight back on a fraction of a second
+-- later, over the settings that had just been restored.
+function Steps:CancelPending()
+    for _, key in ipairs({ "bars", "size" }) do
+        local step = self.list[key]
+        if step and step.timer then
+            step.timer:Cancel()
+            step.timer = nil
+        end
+    end
 end
 
 return Steps

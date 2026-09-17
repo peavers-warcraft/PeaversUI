@@ -128,8 +128,14 @@ function ConfigUI:BuildOverviewPage(parentFrame)
                   "through which modules you want, how they should be arranged, " ..
                   "and what to do about graphics."
     else
+        -- The interface size is named whenever it is not the default, because it
+        -- is the one thing here that explains why somebody's screen does not
+        -- match the layout's screenshots. Silence means the size as drawn.
+        local canvas = tonumber(PUI.Config.canvas)
         summary = "Installed with the " .. (layout and layout.name or PUI.Config.layout) ..
                   " layout" ..
+                  (canvas and canvas ~= Layouts.CANVAS_HEIGHT
+                      and (" at " .. Layouts:SizeLabel(canvas)) or "") ..
                   (PUI.Config.graphicsPreset and PUI.Config.graphicsPreset ~= "none"
                       and (", graphics preset " .. PUI.Config.graphicsPreset) or "") ..
                   ". Everything it wrote is an ordinary setting in the module's own " ..

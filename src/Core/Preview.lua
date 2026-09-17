@@ -141,8 +141,12 @@ end
 -- matches what the player is looking at; without this check, walking back to
 -- that screen would revert and re-apply the same layout for no reason, which is
 -- visible as a flicker.
-function Preview:IsShowing(layoutKey)
-    return self.active ~= nil and self.active.layout == layoutKey
+--- @param layoutKey string
+--- @param canvas number|nil  also require the interface size to match
+function Preview:IsShowing(layoutKey, canvas)
+    if self.active == nil or self.active.layout ~= layoutKey then return false end
+    if canvas ~= nil and self.active.canvas ~= canvas then return false end
+    return true
 end
 
 -- @param layoutKey string
@@ -163,8 +167,14 @@ function Preview:Start(layoutKey, choices)
         return false, "Not in combat - try again when the fight is over."
     end
 
-    local overrides = layout.overrides or {}
-    local state = { layout = layoutKey, taken = {}, modules = {} }
+    -- The layout drawn for the interface size being previewed, not as shipped.
+    -- The snapshot below is built by walking this table, so taking it against
+    -- the unscaled layout would record the wrong key at every position and hand
+    -- back an undo that put the frames somewhere they had never been.
+    local canvas = choices and choices.canvas
+    local style = choices and choices.style
+    local overrides = PUI.Installer:OverridesForLayout(layoutKey, canvas, style)
+    local state = { layout = layoutKey, canvas = canvas, taken = {}, modules = {} }
 
     for _, module in ipairs(Modules:OfRole("display")) do
         if Modules:IsAvailable(module) then
@@ -186,6 +196,8 @@ function Preview:Start(layoutKey, choices)
     -- Reuse the installer rather than reimplementing the apply. A preview that
     -- writes settings by a different code path is a preview of something else.
     local plan = PUI.Installer:NewChoices(layoutKey)
+    plan.canvas = canvas or plan.canvas
+    plan.style = style or plan.style
     for _, module in ipairs(Modules:OfRole("display")) do
         plan.modules[module.key] = choices and choices.modules[module.key] or false
     end
@@ -348,7 +360,10 @@ function Preview:ApplyUpdate(layoutKey, choices)
         return false, "Not in combat - the layout update waits until the fight is over."
     end
 
-    local state = Take(layout.overrides or {})
+    -- Drawn for the size and painted in the style this account is installed at,
+    -- so the snapshot names the same keys the apply below is about to write.
+    local state = Take(PUI.Installer:OverridesForLayout(layoutKey,
+        choices and choices.canvas, choices and choices.style))
     PUI.Config.updateRestore = {
         layout = layoutKey,
         fromRevision = PUI.Config.layoutRevision,

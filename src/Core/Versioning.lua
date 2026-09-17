@@ -75,6 +75,60 @@ function Versioning:Migrate()
     return true
 end
 
+--------------------------------------------------------------------------------
+-- Installs on a layout that no longer exists
+--
+-- Compact, Cinematic and Raid were retired. An account installed on one of them
+-- holds a key nothing can resolve any more, so it is pointed at the nearest
+-- surviving layout - and pinned, which is the whole point of doing it here
+-- rather than leaving Get() to paper over it.
+--
+-- Pinned because a substitution is not a choice the player made. Their screen is
+-- still arranged the way the retired layout left it and must stay that way;
+-- writing the replacement over it would be precisely the "an update rearranged
+-- my UI" failure this file exists to prevent. The new key only decides what the
+-- settings page calls it and what the wizard preselects next time.
+--
+-- A rename is different and is not announced: Standard became Peavers UI, the
+-- layout is identical, and there is nothing to tell anybody.
+--------------------------------------------------------------------------------
+function Versioning:MigrateRetired()
+    local config = PUI.Config
+    local Layouts = PUI.Layouts
+
+    local key = config.layout
+    if not config.installedVersion or key == Layouts.CURRENT then return false end
+
+    local replacement = not Layouts.list[key] and Layouts.retired[key or ""]
+    if not replacement then return false end
+
+    config.layout = replacement
+
+    if Layouts.renamed[key] then
+        config:Save()
+        return true
+    end
+
+    config.track = self.PINNED
+    config.retiredFrom = key
+    config:Save()
+    return true
+end
+
+--- The retired layout this account was moved off, if it has not been told yet.
+function Versioning:RetiredNotice()
+    local key = PUI.Config.retiredFrom
+    if not key then return nil end
+
+    local layout = PUI.Layouts:Get(PUI.Config.layout)
+    return key, layout and layout.name or PUI.Config.layout
+end
+
+function Versioning:ClearRetiredNotice()
+    PUI.Config.retiredFrom = nil
+    PUI.Config:Save()
+end
+
 function Versioning:NoticeDue()
     return PUI.Config.installedVersion ~= nil and PUI.Config.versioningNoticeShown == false
 end
