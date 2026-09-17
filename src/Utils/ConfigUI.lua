@@ -305,7 +305,23 @@ function ConfigUI:BuildLayoutPage(parentFrame)
         apply:SetPoint("TOPLEFT", INDENT + ActionX(width), y - 2)
 
         y = y - ROW_HEIGHT
-        y = Paragraph(parentFrame, entry.layout.blurb, y, width, { gap = GAP_SECTION })
+
+        -- The same words the installer's layout screen uses, so the two places
+        -- that describe a layout describe it identically.
+        --
+        -- There the tagline sits beside the name, anchored to its right edge.
+        -- Here it leads the description instead, because every widget on this
+        -- page is placed at an absolute offset from the panel: the settings
+        -- pages are measured outside the game by perf/cases/pages.lua, against
+        -- stand-in widgets whose SetPoint takes a point and two numbers. An
+        -- anchor relative to another widget would hand that a frame where it
+        -- expects an x, and the geometry it asserts would be nonsense.
+        local description = entry.layout.blurb
+        if entry.layout.tagline then
+            description = entry.layout.tagline .. ". " .. description
+        end
+
+        y = Paragraph(parentFrame, description, y, width, { gap = GAP_SECTION })
     end
 
     Finish(parentFrame, y)
