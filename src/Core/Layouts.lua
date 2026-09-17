@@ -1163,8 +1163,17 @@ local DEFAULT_ASPECT = 16 / 9
 
 -- Whole units, mirrored around zero. Almost every coordinate in this file is
 -- negative, and math.floor(x + 0.5) on a negative is not rounding but rounding
--- down: -296.25 would become -297 while its positive twin became 296. Half a UI
--- unit is the difference between a hairline drawn once and drawn twice.
+-- down: -296.25 would become -297 while its positive twin became 296.
+--
+-- Whole UI units, and only that. It is tempting to claim this keeps hairlines
+-- crisp and it does not: a UI unit is a whole physical pixel only at the pixel
+-- perfect scale, and at any other - which is most of the slider - it is a
+-- fraction of one, so a coordinate on a whole unit can still land mid-pixel.
+-- Staying crisp at an arbitrary scale means snapping every drawn edge to the
+-- pixel grid at draw time, the way ElvUI's E:Scale does, and that belongs in
+-- whatever draws the frame rather than in a table of positions. What this is
+-- for is tidiness: integers are what a person reads in a settings page and
+-- compares against the number above.
 local function Round(value)
     if value >= 0 then return math.floor(value + 0.5) end
     return -math.floor(-value + 0.5)
