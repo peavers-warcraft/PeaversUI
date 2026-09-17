@@ -166,7 +166,7 @@ Negative claims rot quietly, so it is measured rather than asserted. The table b
 
 | Check | Measured | Budget | |
 |---|---:|---:|:--:|
-| Packaged size | 230.1 KB | 260 KB | pass |
+| Packaged size | 292.5 KB | 310 KB | pass |
 | Bundled libraries | 0 | 0 | pass |
 | Widget calls per frame | 0 | 0 | pass |
 | Widget calls per second while idle | 0 | 0 | pass |
@@ -177,12 +177,13 @@ Scenarios driven against the real addon source, outside the game:
 |---|---:|---|
 | installing the pack, six modules and a graphics preset | 0.00 | 38 calls into the module addons for the whole install, 0 frames created; happens once |
 | idle, after installing | 0.00 | no OnUpdate, no ticker, no combat events: the pack does nothing at all once the installer has closed |
-| layout data checked against the module settings | 0.00 | 4 layouts, 262 module blocks verified key by key |
+| layout data checked against the module settings | 0.00 | 3 layouts, 310 module blocks verified key by key |
 | extras list checked | 0.00 | 11 recommended addons, 0 with a shared profile string |
+| layouts redrawn at a different interface size | 0.00 | 12 unit frames re-derived on a 1080-unit canvas: every position scaled, every size left alone, and the shipped layout untouched |
 | live preview applied and undone | 0.00 | every setting restored exactly, including keys the layout created that did not exist before |
 | settings pages laid out | 0.00 | 3 pages on 3 shared columns: each sizes its own scroll child, nothing overlaps in the left column, and no widget runs off the panel |
 
-<sub>5,757 lines of Lua · 230.1 KB packaged · no bundled libraries</sub>
+<sub>7,109 lines of Lua · 292.5 KB packaged · no bundled libraries</sub>
 
 <!-- perf:end -->
 
