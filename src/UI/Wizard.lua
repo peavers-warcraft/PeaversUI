@@ -333,6 +333,16 @@ end
 ---@field label FontString
 local previewBar
 
+-- Set while the window is being hidden to get out of its own way, rather than
+-- because somebody left.
+--
+-- The cleanup hangs off the frame's OnHide so that Escape and the close glyph
+-- both reach it, and standing aside hides the same frame - so without this the
+-- button marked "hide the installer and look" reverted the layout it was about
+-- to show you, printed "Layout undone", and then raised a strip saying "Trying:
+-- Standard" over an interface that was no longer trying anything.
+local standingAside = false
+
 local function BuildPreviewBar()
     previewBar = CreateFrame("Frame", "PeaversUIPreviewBar", UIParent, "BackdropTemplate") --[[@as PreviewBar]]
     previewBar:SetSize(360, 40)
@@ -386,7 +396,12 @@ function Wizard:EnterPreview(layoutKey)
     previewBar.label:SetText("Trying: " .. (layout and layout.name
         or (layoutKey == PUI.Layouts.CURRENT and "your current setup") or layoutKey))
 
+    -- Bracketed rather than set and left: Hide fires OnHide synchronously, so
+    -- the flag is only ever true for the length of that one call.
+    standingAside = true
     if frame then frame:Hide() end
+    standingAside = false
+
     previewBar:Show()
 end
 
@@ -431,6 +446,19 @@ function Wizard:Show(startStep)
         self.choices.graphicsPreset = "none"
     end
 
+    -- A first install starts on the size this screen wants; every later run
+    -- starts on the size this account already holds, which NewChoices has
+    -- already filled in.
+    --
+    -- Only a first install, and deliberately: re-running the wizard on a machine
+    -- whose monitor disagrees with the one the pack was set up on must not
+    -- quietly resize an interface somebody is happy with. The suggestion is
+    -- still marked on the size screen either way, so it is one click away rather
+    -- than applied behind them.
+    if PUI.Config.canvas == nil and not PUI.Config.installedVersion then
+        self.choices.canvas = PUI.Layouts:RecommendedCanvas()
+    end
+
     -- Following future layout updates is only on because somebody ticked it: a
     -- re-run keeps their last answer, a first run starts pinned.
     self.choices.track = PUI.Config.installedVersion and PUI.Config.track
@@ -458,7 +486,16 @@ end
 -- alike, and it has to be safe to call more than once: hiding an already hidden
 -- frame is a no-op but Hide() also calls frame:Hide() explicitly.
 function Wizard:OnClosed()
+    -- The window standing aside so a layout can be looked at is not the window
+    -- being closed, and the strip it leaves behind carries the undo.
+    if standingAside then return end
+
     if previewBar then previewBar:Hide() end
+
+    -- Before the revert below, not after: the size step settles its re-apply on
+    -- a timer, and one still in flight would land after the restore and put the
+    -- layout back on a screen that had just been handed back.
+    PUI.Steps:CancelPending()
 
     -- Closing the installer without finishing is backing out, and a layout left
     -- applied would be exactly the silent change this whole design promises not

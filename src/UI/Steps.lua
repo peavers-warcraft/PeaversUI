@@ -1,10 +1,10 @@
 --------------------------------------------------------------------------------
 -- PeaversUI wizard steps
 --
--- Five pages, in order: what you have, what you want, how it should look, what
--- to do about graphics, and a summary you have to agree to before anything is
--- written. Each is a table with a title, a Build(page, choices), and optionally
--- an OnNext that can take the footer click for itself.
+-- Six pages, in order: what you have, what you want, how it should look, how big
+-- it should be, what to do about graphics, and a summary you have to agree to
+-- before anything is written. Each is a table with a title, a Build(page,
+-- choices), and optionally an OnNext that can take the footer click for itself.
 --
 -- The shape of the whole thing follows one rule: nothing is applied until the
 -- last step. Ticking boxes and picking layouts only edits the `choices` table,
@@ -460,7 +460,248 @@ Steps.list.layout = {
 }
 
 --------------------------------------------------------------------------------
--- 4. Graphics
+-- 4. Interface size
+--
+-- The layout screen answers what this should look like. This one answers how
+-- big, which has a different right answer on every machine and was the one thing
+-- the pack decided on everybody's behalf: every layout was drawn on a 1440-unit
+-- canvas and every install got that canvas, which is right on the monitor the
+-- pack was built on and too small to read on a laptop.
+--
+-- Like the layout screen, it applies as you click. "A third larger" means
+-- nothing until it is on your own screen at your own seating distance, so the
+-- rows re-apply the whole layout at the new canvas and the window can stand
+-- aside to let you look.
+--------------------------------------------------------------------------------
+
+-- The re-apply settles rather than firing per step: dragging the slider walks
+-- every value in between, and each one would otherwise rewrite six addons'
+-- settings and rebuild their frames. Long enough that a drag settles once;
+-- short enough that a click on a row still feels like the click did it.
+local SIZE_SETTLE = 0.25
+
+Steps.list.size = {
+    title = "How big should it be",
+    subtitle = "The layouts are drawn at a fixed size so they land in the same place " ..
+               "on any screen - which means the pack needs telling which screen. " ..
+               "This changes as you click, the same way the layouts do.",
+
+    Build = function(self, page, choices)
+        local width = PUI.Wizard:ContentWidth()
+        local scaler = Modules.byKey.scaler
+
+        -- A pending re-apply belongs to the page that scheduled it. Rendering
+        -- this step again - arriving, or coming back - starts a new page, so the
+        -- old timer would write its status line onto a frame nobody can see.
+        if self.timer then
+            self.timer:Cancel()
+            self.timer = nil
+        end
+
+        ------------------------------------------------------------------------
+        -- Nothing being placed
+        --
+        -- "Keep my current setup" writes no positions and no scale, so there is
+        -- no canvas to draw it on and nothing here to ask. A size chooser that
+        -- did nothing would be the only screen in this installer that lied.
+        ------------------------------------------------------------------------
+        if choices.layout == Layouts.CURRENT then
+            local note = Paragraph(page,
+                "You are keeping your own setup, so the pack is not placing anything and " ..
+                "has no reason to change how big it is. Your UI scale is left exactly " ..
+                "where you have it.\n\n" ..
+                "If it is your scale you want to change rather than your layout, " ..
+                "/pscaler does that on its own - presets, a slider and a pixel-perfect " ..
+                "mode - without this installer rewriting anything else.", width)
+            note:SetPoint("TOPLEFT", 0, -4)
+            return
+        end
+
+        ------------------------------------------------------------------------
+        -- Nothing to set it with
+        --
+        -- PeaversScaler is what holds the UI scale; without it the pack can
+        -- place a layout but not size it. Say so rather than offering a chooser
+        -- whose every option does the same nothing.
+        ------------------------------------------------------------------------
+        if not Modules:IsAvailable(scaler) then
+            local note = Paragraph(page,
+                "PeaversScaler is not running, so there is no size to choose: the pack " ..
+                "can move things around your screen but not change how big your screen " ..
+                "is in UI units.\n\n" ..
+                "The layout is placed for the size it was drawn at, which is right if " ..
+                "your UI scale is already there and small if it is not. Install " ..
+                "PeaversScaler and run /pui again, or set Blizzard's own UI scale by " ..
+                "hand and come back.", width)
+            note:SetPoint("TOPLEFT", 0, -4)
+            choices.canvas = Layouts.CANVAS_HEIGHT
+            return
+        end
+
+        local y = 0
+        local status
+
+        ------------------------------------------------------------------------
+        -- Switched off two screens back
+        --
+        -- Still a real question, since the positions are written for a canvas
+        -- either way, but nothing here will set the scale to match - so it is
+        -- said at the top rather than discovered on the summary.
+        ------------------------------------------------------------------------
+        if not choices.modules[scaler.key] then
+            local warn, warnHeight = Paragraph(page,
+                "The Scaler is switched off, so nothing will change your UI scale. The " ..
+                "size below still decides where the layout puts things, so pick the one " ..
+                "matching the scale you already run - or go back a screen and switch the " ..
+                "Scaler on.", width, { color = C.amber, alpha = Style.Alpha.secondary })
+            warn:SetPoint("TOPLEFT", 0, y)
+            y = y - (warnHeight + Style.Pad.section)
+        end
+
+        local rows = {}
+        local slider
+        local sliderEcho = false   -- our own SetValue, not a drag: ignore it
+
+        local recommended = Layouts:RecommendedCanvas()
+
+        local function Apply()
+            self.timer = nil
+
+            local ok, reason = PUI.Preview:Start(choices.layout, choices)
+            if not status then return end
+
+            if ok then
+                status:SetText("On screen now at " .. Layouts:SizeLabel(choices.canvas) ..
+                    ". Hide the installer to see it properly.")
+                Style.Text(status, Style.Size.value, Style.Alpha.secondary)
+            else
+                status:SetText(reason or "Could not change the size right now.")
+                Style.Text(status, Style.Size.value, Style.Alpha.primary, C.amber)
+            end
+        end
+
+        local function ApplySoon()
+            if self.timer then self.timer:Cancel() end
+            self.timer = C_Timer.NewTimer(SIZE_SETTLE, function() Apply() end)
+        end
+
+        -- `custom` is the row the slider drives. Clicking a named size moves the
+        -- slider to match; moving the slider lights `custom`, because a value
+        -- between two named sizes is not either of them.
+        local function Select(canvas, applyIt)
+            choices.canvas = canvas
+
+            local named = Layouts:SizeKeyFor(canvas)
+            for rowKey, row in pairs(rows) do
+                row:SetSelected(rowKey == (named or "custom"))
+            end
+
+            if slider then
+                sliderEcho = true
+                slider:SetValue(Layouts:SizeOf(canvas))
+                sliderEcho = false
+            end
+
+            if applyIt then ApplySoon() end
+        end
+
+        ------------------------------------------------------------------------
+        -- The named sizes
+        ------------------------------------------------------------------------
+        y = Style.Section(page, "Size", y, width)
+
+        for _, size in ipairs(Layouts.sizes) do
+            local tagline = Layouts:SizeLabel(size.canvas)
+            -- The suggestion is marked, never pre-selected on a re-run: see
+            -- Wizard:Show. On a first install it is already the selected row,
+            -- and saying so is what explains why.
+            if size.canvas == recommended then
+                tagline = tagline .. " - suggested for your screen"
+            end
+
+            local row, nextY = ChoiceRow(page, y, width, {
+                title = size.label,
+                tagline = tagline,
+                blurb = size.blurb,
+                onClick = function() Select(size.canvas, true) end,
+            })
+            rows[size.key] = row
+            y = nextY
+        end
+
+        -- No blurb: the slider directly underneath is the explanation, and the
+        -- page has exactly one row's worth of height to spare.
+        local customRow, afterCustom = ChoiceRow(page, y, width, {
+            title = "Custom",
+            tagline = "set it by hand with the slider below",
+            onClick = function()
+                if slider then Select(Layouts:CanvasFor(slider:GetValue()), true) end
+            end,
+        })
+        rows.custom = customRow
+        y = afterCustom - Style.Pad.section
+
+        ------------------------------------------------------------------------
+        -- The slider
+        ------------------------------------------------------------------------
+        slider = W:CreateSlider(page, "Interface size", {
+            width = width,
+            min = Layouts.SIZE_MIN,
+            max = Layouts.SIZE_MAX,
+            step = Layouts.SIZE_STEP,
+            value = Layouts:SizeOf(choices.canvas),
+            format = function(value)
+                return math.floor(value * 100 + 0.5) .. "%"
+            end,
+            onChange = function(value)
+                -- SetValue from Select fires this too, and letting it through
+                -- would turn every click on a named row into a custom size two
+                -- decimal places away from it.
+                if sliderEcho then return end
+                Select(Layouts:CanvasFor(value), true)
+            end,
+        })
+        slider:SetPoint("TOPLEFT", 0, y)
+        y = y - (44 + Style.Pad.section)
+
+        ------------------------------------------------------------------------
+        -- Getting the window out of the way
+        ------------------------------------------------------------------------
+        local hide = Style.Button(page, "Hide the installer and look", {
+            variant = "secondary",
+            width = 200,
+            onClick = function()
+                PUI.Wizard:EnterPreview(choices.layout)
+            end,
+        })
+        hide:SetPoint("TOPLEFT", 0, y)
+
+        status = Style.Label(page, "", Style.Size.value, Style.Alpha.muted, {
+            width = width - 216,
+            wrap = true,
+        })
+        status:SetPoint("TOPLEFT", 212, y - 4)
+
+        ------------------------------------------------------------------------
+        -- Arriving on this screen
+        --
+        -- Light the row that matches, and only re-apply when what is on screen
+        -- is not already this layout at this size - which it usually is, having
+        -- come straight from the layout screen.
+        ------------------------------------------------------------------------
+        local canvas = tonumber(choices.canvas) or Layouts.CANVAS_HEIGHT
+        Select(canvas, not PUI.Preview:IsShowing(choices.layout, canvas))
+
+        if PUI.Preview:IsShowing(choices.layout, canvas) then
+            status:SetText("On screen now at " .. Layouts:SizeLabel(canvas) ..
+                ". Hide the installer to see it properly.")
+            Style.Text(status, Style.Size.value, Style.Alpha.secondary)
+        end
+    end,
+}
+
+--------------------------------------------------------------------------------
+-- 5. Graphics
 --------------------------------------------------------------------------------
 
 Steps.list.graphics = {
@@ -625,7 +866,7 @@ Steps.list.graphics = {
 }
 
 --------------------------------------------------------------------------------
--- 5. Review, then done
+-- 6. Review, then done
 --
 -- One step wearing two faces. Keeping the result on the same page as the plan
 -- is deliberate: the summary you agreed to and the report of what happened line
@@ -810,15 +1051,32 @@ Steps.list.review = {
     end,
 }
 
--- The footer counts these to say "step 3 of 5", so this is also the length of
+-- The footer counts these to say "step 3 of 6", so this is also the length of
 -- the wizard.
-Steps.order = { "welcome", "modules", "layout", "graphics", "review" }
+Steps.order = { "welcome", "modules", "layout", "size", "graphics", "review" }
 
 -- The review step carries its own result between renders, which would otherwise
 -- survive into the next run and show a stale report. Cleared whenever the
 -- wizard opens.
+--
+-- The size step's pending re-apply goes with it: a timer left running from a
+-- closed wizard would write a layout onto the screen of somebody who had already
+-- walked away from the question.
 function Steps:Reset()
     self.list.review.result = nil
+    self:CancelPending()
+end
+
+-- Drop any re-apply the size step still has in flight. Called when the wizard
+-- opens and again when it closes: closing reverts the preview, and a timer that
+-- survived it would put the layout straight back on a fraction of a second
+-- later, over the settings that had just been restored.
+function Steps:CancelPending()
+    local size = self.list.size
+    if size and size.timer then
+        size.timer:Cancel()
+        size.timer = nil
+    end
 end
 
 return Steps

@@ -837,9 +837,21 @@ end
 --
 -- A layout may name its own scaler block to use a different canvas; one that
 -- does has to be positioned for it.
+--
+-- And the canvas is a *choice*, not a constant - see "Interface size" below.
+-- 1440 units is where the layouts were drawn and what every screenshot of the
+-- pack shows, but it is also the reason the pack reads small on a laptop: a
+-- 1440-unit canvas on a 15-inch screen is the same interface as on a 27-inch
+-- monitor, at half the physical size. Asking for a shorter canvas is how you
+-- get a bigger interface, and the positions are re-derived for it rather than
+-- left where a 1440-unit screen put them.
 --------------------------------------------------------------------------------
 
 Layouts.CANVAS = "1440p"
+
+-- How many UI units tall the screen is when a layout is drawn as designed.
+-- Every coordinate above is in units of this canvas; see Layouts:OverridesFor.
+Layouts.CANVAS_HEIGHT = 1440
 
 for _, layout in pairs(Layouts.list) do
     local overrides = layout.overrides
@@ -852,6 +864,266 @@ for _, layout in pairs(Layouts.list) do
             overrides.scaler.scaleMode = Layouts.CANVAS
         end
     end
+end
+
+--------------------------------------------------------------------------------
+-- Interface size
+--
+-- One number - the canvas height in UI units - put to the player as a percentage
+-- of the size the pack was drawn at. A shorter canvas spreads fewer UI units
+-- across the same screen, so every unit is more pixels and the interface comes
+-- out physically larger: 1080 units is this pack at 133%.
+--
+-- A canvas needs a UI scale of 768 / height, which is what PeaversScaler is
+-- asked for. 200% needs 1.067 and 70% needs 0.373, both inside PeaversScaler's
+-- own [0.25, 1.25] - which is where SIZE_MIN and SIZE_MAX come from rather than
+-- being picked.
+--
+-- Always a frozen number, never PeaversScaler's pixelPerfect mode: the positions
+-- above are written for one canvas height at install time, and a mode that
+-- recomputed later would move the canvas out from under them. The recommendation
+-- below is the pixel-perfect scale for the screen it is asked on; it is just
+-- frozen rather than followed.
+--------------------------------------------------------------------------------
+
+local UI_HEIGHT = 768          -- WoW's virtual screen height, at a scale of 1.0
+
+Layouts.SIZE_MIN = 0.70
+Layouts.SIZE_MAX = 2.00
+-- One percent, not five. The Laptop canvas is 1440/1080 = 133.3%, and a slider
+-- that could only stop on multiples of five would read "135%" the moment you
+-- clicked a row labelled 133%.
+Layouts.SIZE_STEP = 0.01
+
+--- The canvas height that draws the pack at `size` (1 = as drawn).
+function Layouts:CanvasFor(size)
+    size = tonumber(size) or 1
+    if size < self.SIZE_MIN then size = self.SIZE_MIN end
+    if size > self.SIZE_MAX then size = self.SIZE_MAX end
+    return self.CANVAS_HEIGHT / size
+end
+
+--- The size a canvas height draws the pack at, as a multiplier of "as drawn".
+function Layouts:SizeOf(canvas)
+    canvas = tonumber(canvas)
+    if not canvas or canvas <= 0 then return 1 end
+    return self.CANVAS_HEIGHT / canvas
+end
+
+--- The UI scale PeaversScaler has to hold for a canvas to be that many units.
+function Layouts:ScaleFor(canvas)
+    return UI_HEIGHT / (tonumber(canvas) or self.CANVAS_HEIGHT)
+end
+
+-- The named sizes, in the order the installer lists them. Canvas heights are
+-- round screen numbers rather than the arithmetic result of a percentage,
+-- because the canvas is the thing actually being chosen: 1080 is a 1080p screen
+-- drawn one UI unit to one pixel, and reads as that rather than as 133.333%.
+Layouts.sizes = {
+    {
+        key = "roomy", canvas = 1800,
+        label = "Smaller",
+        blurb = "More screen and smaller furniture, for a large monitor you sit close to.",
+    },
+    {
+        key = "drawn", canvas = 1440,
+        label = "As drawn",
+        blurb = "The size the layouts were positioned at, and what the screenshots show.",
+    },
+    {
+        key = "laptop", canvas = 1080,
+        label = "Laptop",
+        blurb = "A third larger, for a laptop or a 1080p monitor where the pack reads small.",
+    },
+    {
+        key = "large", canvas = 960,
+        label = "Large",
+        blurb = "Half again, for a small laptop screen or a television across the room.",
+    },
+}
+
+Layouts.sizeByKey = {}
+for _, size in ipairs(Layouts.sizes) do
+    Layouts.sizeByKey[size.key] = size
+end
+
+--- The named size matching a canvas exactly, or nil for one set by hand.
+function Layouts:SizeKeyFor(canvas)
+    for _, size in ipairs(self.sizes) do
+        if size.canvas == canvas then return size.key end
+    end
+    return nil
+end
+
+--- "133%", for every readout in the installer.
+function Layouts:SizeLabel(canvas)
+    return math.floor(self:SizeOf(canvas) * 100 + 0.5) .. "%"
+end
+
+--------------------------------------------------------------------------------
+-- What to suggest on this screen
+--
+-- A screen 1440 pixels tall or more keeps the canvas as drawn: the layouts were
+-- set by eye at that canvas on a 4K monitor, so a 1440p or better screen is the
+-- one they were set for, and suggesting anything else would mean a fresh install
+-- no longer matched the pack's own screenshots.
+--
+-- Below that, the pack is drawn at less than one UI unit per pixel, which is
+-- where "everything is way too small on my laptop" comes from. The suggestion is
+-- the canvas that matches the screen exactly - 1080 units on a 1080p panel, one
+-- unit to one pixel. That is the largest the pack can be drawn without landing
+-- hairlines on half pixels, and on those screens it is the Laptop size.
+--
+-- Outside the game there is nothing to measure, and the canvas as drawn is the
+-- only honest answer.
+--------------------------------------------------------------------------------
+function Layouts:RecommendedCanvas()
+    if type(_G.GetPhysicalScreenSize) ~= "function" then
+        return self.CANVAS_HEIGHT
+    end
+
+    local ok, _, height = pcall(_G.GetPhysicalScreenSize)
+    if not ok or type(height) ~= "number" or height <= 0 then
+        return self.CANVAS_HEIGHT
+    end
+
+    if height >= self.CANVAS_HEIGHT then
+        return self.CANVAS_HEIGHT
+    end
+
+    -- Clamped through CanvasFor so a very short screen - a windowed client, an
+    -- old 1366x768 laptop - cannot ask for a size the slider has no room for.
+    local canvas = self:CanvasFor(self:SizeOf(height))
+
+    -- Snap to a named size when it is within a step, so the suggestion lands on
+    -- a row somebody can recognise rather than on a custom number a percent away
+    -- from one.
+    local tolerance = self.SIZE_STEP
+    for _, named in ipairs(self.sizes) do
+        if math.abs(self:SizeOf(named.canvas) - self:SizeOf(canvas)) < tolerance then
+            return named.canvas
+        end
+    end
+
+    return canvas
+end
+
+--------------------------------------------------------------------------------
+-- Drawing a layout on a different canvas
+--
+-- Positions scale with the canvas. Sizes do not. Both halves of that rule are
+-- what make a size choice mean "bigger" rather than "the same thing again".
+--
+-- A coordinate is a fraction of the screen written in UI units: y = -395 on a
+-- 1440-unit canvas is 55% of the way down from the middle, and it has to stay
+-- there on any other canvas or the row of unit frames slides off the bottom
+-- edge. So every position is multiplied by canvas / 1440.
+--
+-- A width, a font size or an aura size is not a fraction of anything. It is a
+-- count of UI units, and a UI unit on a shorter canvas is physically larger -
+-- which is the entire change being asked for. Scaling those too would reproduce
+-- the layout at exactly the same physical size and achieve nothing.
+--
+-- The positional keys are named rather than recognised by spelling: a rule like
+-- "anything called x or y" would also catch minimap.widgetLayout, whose entries
+-- are offsets inside the minimap frame, and drag the difficulty flag off the
+-- corner it is pinned to.
+--------------------------------------------------------------------------------
+
+-- "*" stands for every child table: each unit under `units`, whatever it is
+-- called, without this file holding another addon's roster.
+local POSITIONAL = {
+    unitframes = { units = { ["*"] = { "x", "y" } } },
+    castbar    = { units = { ["*"] = { "frameX", "frameY" } } },
+    minimap    = { "offsetX", "offsetY" },
+    chat       = { "chatX", "chatY" },
+    tooltip    = { "anchorX", "anchorY" },
+    -- systembars is deliberately absent. Its position is derived from the
+    -- minimap's by DockSystemBars, re-run below once the minimap block has been
+    -- scaled; scaling it here too would apply the factor twice and undock the
+    -- bars at every size but the one they were docked at.
+}
+
+local function DeepCopy(value)
+    if type(value) ~= "table" then return value end
+    local out = {}
+    for key, inner in pairs(value) do out[key] = DeepCopy(inner) end
+    return out
+end
+
+Layouts.DeepCopy = DeepCopy
+
+-- Walk `block` against a spec from POSITIONAL, multiplying what the spec names.
+local function ScalePositions(block, spec, factor)
+    if type(block) ~= "table" or type(spec) ~= "table" then return end
+
+    for _, key in ipairs(spec) do
+        local value = tonumber(block[key])
+        if value then
+            -- Whole units: a position comes back out of saved variables as a
+            -- pixel offset, and half a UI unit is the difference between a
+            -- hairline drawn once and drawn twice.
+            --
+            -- Mirrored around zero rather than floored, because almost every
+            -- coordinate in this file is negative and math.floor(x + 0.5) on a
+            -- negative is not rounding, it is rounding down: -296.25 would
+            -- become -297 while its positive twin became 296.
+            local scaled = value * factor
+            block[key] = scaled >= 0 and math.floor(scaled + 0.5) or -math.floor(-scaled + 0.5)
+        end
+    end
+
+    for key, inner in pairs(spec) do
+        if type(key) == "string" and type(inner) == "table" then
+            if key == "*" then
+                for _, child in pairs(block) do
+                    ScalePositions(child, inner, factor)
+                end
+            else
+                ScalePositions(block[key], inner, factor)
+            end
+        end
+    end
+end
+
+--- A layout's overrides, drawn for a canvas of `canvas` UI units.
+---
+--- Always a copy, never the shipped table: the installer deep-merges what it is
+--- handed into another addon's live config, and handing over the layout itself
+--- would let one install's arithmetic leak into the next.
+---
+--- @param layoutKey string
+--- @param canvas number|nil  canvas height in UI units; nil means as drawn
+--- @return table overrides
+function Layouts:OverridesFor(layoutKey, canvas)
+    local layout = self:Get(layoutKey)
+    if not layout or not layout.overrides then return {} end
+
+    canvas = tonumber(canvas) or self.CANVAS_HEIGHT
+    local overrides = DeepCopy(layout.overrides)
+
+    if canvas ~= self.CANVAS_HEIGHT then
+        local factor = canvas / self.CANVAS_HEIGHT
+        for key, spec in pairs(POSITIONAL) do
+            ScalePositions(overrides[key], spec, factor)
+        end
+        if overrides.minimap and overrides.systembars then
+            self.DockSystemBars(overrides.minimap, overrides.systembars)
+        end
+    end
+
+    overrides.scaler = overrides.scaler or {}
+    if canvas == self.CANVAS_HEIGHT then
+        -- The one canvas PeaversScaler has a preset for. Naming it keeps that
+        -- addon's settings page reading "1440p" rather than a bare number, and
+        -- it is what every install from before sizes existed already holds.
+        overrides.scaler.scaleMode = self.CANVAS
+    else
+        overrides.scaler.scaleMode = "custom"
+        overrides.scaler.scale = self:ScaleFor(canvas)
+    end
+
+    return overrides
 end
 
 --------------------------------------------------------------------------------

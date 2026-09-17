@@ -27,13 +27,24 @@ That is deliberate. A hard dependency on all ten would mean the pack stops loadi
 
 ## The installer
 
-Runs once, on your first login after installing, and never again unless you ask for it. Five screens:
+Runs once, on your first login after installing, and never again unless you ask for it. Six screens:
 
 1. **What you have.** Every module in the pack, and whether it is running, installed but not enabled at the character screen, or absent. Three different problems needing three different answers.
 2. **Which parts you want.** Everything on by default. Unticking a module switches it off and hands that piece of the interface back to Blizzard — it does not uninstall anything, and each module's own settings turn it back on.
 3. **How it should look.** Four layouts, below.
-4. **Graphics.** A baseline preset, and a plan for switching between presets by content. The one screen that changes the game rather than the interface, so it gets a screen of its own and an explicit yes.
-5. **A summary you have to agree to.**
+4. **How big it should be.** Four named sizes and a slider, below. Changes as you click, the same way the layouts do.
+5. **Graphics.** A baseline preset, and a plan for switching between presets by content. The one screen that changes the game rather than the interface, so it gets a screen of its own and an explicit yes.
+6. **A summary you have to agree to.**
+
+### Interface size
+
+Every layout is positioned on a canvas 1440 UI units tall, and the pack asks PeaversScaler to hold that canvas so the same coordinates land in the same place on a 1080p screen, a 4K one or an ultrawide. That is the right trade on a monitor and the wrong one on a laptop, where it means the whole interface is drawn at three quarters of its native size on a screen that was already small.
+
+So the canvas is a choice. **Smaller** (80%), **As drawn** (100%), **Laptop** (133%) and **Large** (150%) are the named sizes, with a slider for anything between 70% and 200%. The size screen suggests one for the screen you are on: a 1440p or better monitor keeps the canvas the layouts were drawn at, and anything shorter gets the canvas that matches its panel exactly — 1080 units on a 1080p screen, one UI unit to one pixel.
+
+Choosing a size re-derives the layout rather than just zooming it. Every position scales with the canvas, so the unit frames stay the same fraction of the way down the screen; every width, height and font size is left alone, so a shorter canvas draws them larger. That is what makes 133% mean *bigger* rather than *the same thing again*.
+
+The scale is pinned as a fixed number rather than a mode that follows your monitor, because the positions are written for one canvas height at install time — and a canvas that moved out from under them afterwards is exactly the "all out of place on my second PC" problem the fixed canvas exists to prevent.
 
 ### Running it again
 
@@ -165,11 +176,13 @@ The layout data is checked too: every key any layout writes has to be a setting 
 ## Features
 
 <!-- peavers:features -->
-- A five-screen installer that sets up the whole Peavers interface in one pass
+- A six-screen installer that sets up the whole Peavers interface in one pass
 - Nothing is written until the final screen, so backing out changes nothing
 - Click a layout and your interface becomes it on the spot - no screenshots, no mockups, your own screen
 - Every layout you try is undone exactly if you back out, with the undo written to disk first in case the game crashes
 - Four layouts — Standard, Compact, Cinematic and Raid — covering the usual reasons people rearrange a UI
+- An interface size per install — four named sizes and a 70-200% slider — with the layout re-derived for it rather than zoomed, and a suggestion made from the screen you are on
+- Backing out of the size screen is free too: it previews like a layout and undoes like one
 - Per-module on/off, with anything you switch off handed straight back to Blizzard
 - Graphics presets applied through PeaversPerformance, which snapshots every CVar before it touches one
 - A graphics preset per context — raid, Mythic+ (Challenge Mode on Mists Classic), dungeon, open world — pre-filled by the layout you picked, so the settings follow what you are actually doing

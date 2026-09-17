@@ -619,6 +619,106 @@ assert(standardBars.framePoint == "TOPRIGHT" and standardBars.frameX == 0
     "docking moved the Standard system bars away from the transcribed position")
 
 --------------------------------------------------------------------------------
+-- Interface size: the same layout drawn on a shorter canvas
+--
+-- The rule under test is the one in Layouts.lua: positions scale with the
+-- canvas, sizes do not. Both halves matter and each fails differently. Scale the
+-- sizes too and the pack comes out at exactly the physical size it started at,
+-- so the whole feature does nothing; leave the positions alone and the unit
+-- frames walk off the bottom of the screen, which is the bug the fixed canvas
+-- was introduced to prevent in the first place.
+--
+-- Also asserted: the shipped layout is never touched. OverridesFor hands back a
+-- copy, and the installer deep-merges what it is given into a live config - so a
+-- version that mutated in place would resize the layout permanently, and the
+-- second install of a session would scale an already scaled table.
+--------------------------------------------------------------------------------
+
+local sizesChecked = 0
+
+for _, entry in ipairs(Layouts:Sorted()) do
+    local shipped = entry.layout.overrides
+    local drawn = Layouts:OverridesFor(entry.key, Layouts.CANVAS_HEIGHT)
+    local big = Layouts:OverridesFor(entry.key, 1080)
+    local factor = 1080 / Layouts.CANVAS_HEIGHT
+
+    assert(drawn ~= shipped, entry.key .. " OverridesFor must return a copy, not the layout")
+    assert(drawn.scaler.scaleMode == Layouts.CANVAS,
+        entry.key .. " at the canvas it was drawn on should name the 1440p preset")
+    assert(drawn.scaler.scale == nil,
+        entry.key .. " at the drawn canvas should not pin a raw scale beside the preset")
+
+    for unit, block in pairs(shipped.unitframes.units) do
+        local scaled = big.unitframes.units[unit]
+        for _, key in ipairs({ "x", "y" }) do
+            if block[key] then
+                local exact = block[key] * factor
+                local want = exact >= 0 and math.floor(exact + 0.5) or -math.floor(-exact + 0.5)
+                assert(scaled[key] == want, entry.key .. " " .. unit .. "." .. key ..
+                    " should scale with the canvas: wanted " .. want .. ", got " .. tostring(scaled[key]))
+            end
+        end
+        for _, key in ipairs({ "width", "height", "fontSize", "auraSize" }) do
+            assert(scaled[key] == block[key], entry.key .. " " .. unit .. "." .. key ..
+                " is a size, not a position, and must not scale with the canvas")
+        end
+        sizesChecked = sizesChecked + 1
+    end
+
+    -- Untouched by the arithmetic above, which is the point of the copy.
+    assert(shipped.unitframes.units.player.y == drawn.unitframes.units.player.y,
+        entry.key .. " was resized in place - the shipped layout must never move")
+
+    -- The bars are re-docked from the scaled minimap rather than scaled
+    -- themselves, or they would take the factor twice and float off the corner.
+    local map, bars = big.minimap, big.systembars
+    local edge = map.size * map.scale
+    assert(bars.frameY == -(map.offsetY * map.scale + edge),
+        entry.key .. " system bars came undocked at a different interface size")
+    assert(bars.frameWidth == edge + 2,
+        entry.key .. " system bars should stay the minimap's width at any size")
+
+    -- Offsets inside the minimap frame are not screen positions and must not move.
+    if shipped.minimap.widgetLayout then
+        for key, widget in pairs(shipped.minimap.widgetLayout) do
+            assert(big.minimap.widgetLayout[key].x == widget.x
+                and big.minimap.widgetLayout[key].y == widget.y,
+                entry.key .. " minimap widget " .. key .. " is placed inside the minimap, not on the screen")
+        end
+    end
+end
+
+-- A size other than the drawn one is pinned as a number, because a mode would
+-- recompute later and move the canvas out from under the positions just written.
+local laptop = Layouts:OverridesFor("standard", 1080)
+assert(laptop.scaler.scaleMode == "custom" and math.abs(laptop.scaler.scale - 768 / 1080) < 1e-9,
+    "a custom canvas must pin a fixed scale rather than a resolution-dependent mode")
+
+-- Standard's unit frame row sits at y = -395 on the 1440 canvas, which is 55% of
+-- the way down. On 1080 that has to be -296, not -395: at -395 the row would be
+-- 73% of the way down a shorter screen, which is how the pack came out "all out
+-- of place" before the canvas was pinned at all.
+assert(laptop.unitframes.units.player.y == -296,
+    "Standard's unit frames are not the same fraction down a 1080-unit screen, got "
+    .. tostring(laptop.unitframes.units.player.y))
+assert(laptop.unitframes.units.player.width == 170,
+    "Standard's unit frames should keep their width in UI units, so a shorter canvas draws them larger")
+
+-- Percentages round-trip: the readouts in the installer are derived from the
+-- canvas rather than stored beside it.
+assert(Layouts:SizeLabel(1080) == "133%" and Layouts:SizeLabel(Layouts.CANVAS_HEIGHT) == "100%",
+    "interface size percentages are not derived from the canvas height")
+assert(Layouts:CanvasFor(Layouts:SizeOf(960)) == 960, "canvas and size do not round-trip")
+assert(Layouts:SizeKeyFor(1080) == "laptop", "1080 units should be the named Laptop size")
+assert(Layouts:CanvasFor(99) == Layouts:CanvasFor(Layouts.SIZE_MAX),
+    "a size past the slider's end must clamp, not ask PeaversScaler for a scale it cannot hold")
+
+-- Outside the game there is no screen to measure, so the suggestion is the
+-- canvas as drawn rather than a guess.
+assert(Layouts:RecommendedCanvas() == Layouts.CANVAS_HEIGHT,
+    "with no GetPhysicalScreenSize the suggestion must be the canvas as drawn")
+
+--------------------------------------------------------------------------------
 -- Detection
 --------------------------------------------------------------------------------
 
@@ -962,6 +1062,51 @@ PTT.Config.cursorOffsetX = 19
 Installer:Apply(mergeChoices)
 assert(PTT.Config.cursorOffsetX == 19,
     "without a reset, a setting the layout does not name must be left alone")
+
+--------------------------------------------------------------------------------
+-- Installing at a different interface size
+--
+-- The same layout, the same modules, one number different - and every position
+-- written into the module addons has to come out re-derived for it while every
+-- size stays where it was. This is the whole feature end to end: the canvas
+-- reaches PeaversScaler as a fixed scale, and the positions reach the other
+-- modules already drawn for it.
+--------------------------------------------------------------------------------
+
+local sized = Installer:NewChoices("standard")
+sized.canvas = 1080
+sized.graphicsPreset = "none"
+sized.autoSwitch = nil
+Installer:Apply(sized)
+
+assert(PSC.Config.scaleMode == "custom", "a custom canvas should not name a preset")
+assert(math.abs(PSC.Config.scale - 768 / 1080) < 1e-9,
+    "the scaler was given the wrong scale for a 1080-unit canvas, got " .. tostring(PSC.Config.scale))
+assert(PUF.Config.units.player.y == -296,
+    "the unit frames were not re-derived for the chosen size, got " .. tostring(PUF.Config.units.player.y))
+assert(PUF.Config.units.player.width == 170,
+    "a width is a size, not a position, and must survive a change of interface size")
+assert(PUF.Config.units.player.healthColorMode == "custom",
+    "everything the layout says that is not a position should be unaffected by the size")
+
+-- And back again, which is what re-running at the default has to do. A layout
+-- that had been scaled in place would come back at 75% of where it started.
+local back = Installer:NewChoices("standard")
+back.canvas = PUI.Layouts.CANVAS_HEIGHT
+back.graphicsPreset = "none"
+back.autoSwitch = nil
+Installer:Apply(back)
+assert(PUF.Config.units.player.y == -395,
+    "returning to the drawn size did not put the layout back, got " .. tostring(PUF.Config.units.player.y))
+assert(PSC.Config.scaleMode == "1440p", "the drawn size should go back to naming the preset")
+
+-- The account remembers the size it was installed at, so a later /pui apply or a
+-- layout update redraws for the same canvas rather than snapping back to 1440.
+PUI.Config:MarkInstalled(sized)
+assert(PUI.Config.canvas == 1080, "the installed interface size was not recorded")
+assert(Installer:NewChoices("standard").canvas == 1080,
+    "a fresh set of choices should start from the size this account is installed at")
+PUI.Config.canvas = nil
 
 -- Switching a module off must not wipe it. Turning something off means stop
 -- drawing it, not throw away how it was set up.
@@ -1557,6 +1702,13 @@ return {
         idleCallsPerSecond = 0,
         notes = extrasChecked .. " recommended addons, " .. withProfiles ..
                 " with a shared profile string",
+    },
+    {
+        name = "layouts redrawn at a different interface size",
+        callsPerFrame = 0,
+        idleCallsPerSecond = 0,
+        notes = sizesChecked .. " unit frames re-derived on a 1080-unit canvas: every " ..
+                "position scaled, every size left alone, and the shipped layout untouched",
     },
     {
         name = "live preview applied and undone",

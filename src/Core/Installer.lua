@@ -62,6 +62,20 @@ end
 Installer.DeepMerge = DeepMerge
 
 --------------------------------------------------------------------------------
+-- The overrides a set of choices asks for
+--
+-- Everything that reads a layout goes through Layouts:OverridesFor with the
+-- chosen canvas - the install, the summary and the live preview's snapshot - so
+-- all three walk the same table. Reading the shipped layout anywhere would take
+-- a snapshot against unscaled positions and hand back an undo that put the
+-- frames somewhere they had never been.
+--------------------------------------------------------------------------------
+function Installer:OverridesFor(choices)
+    if not choices or choices.layout == Layouts.CURRENT then return {} end
+    return Layouts:OverridesFor(choices.layout, choices.canvas)
+end
+
+--------------------------------------------------------------------------------
 -- Choices
 --
 -- The shape the wizard fills in and the installer consumes. Built here rather
@@ -95,6 +109,13 @@ function Installer:NewChoices(layoutKey)
         -- when you log in, the plan is what happens when you zone.
         autoSwitch = Layouts:AutoSwitchFor(key),
         autoSwitchTouched = false,
+        -- The canvas the layout is drawn for: the interface size question. What
+        -- the account already holds, never the recommendation - a re-run, a
+        -- /pui apply or a layout update must not resize somebody's interface
+        -- because their monitor would have been told something different on a
+        -- first install. The wizard is the only caller that pre-selects the
+        -- suggestion, and only when nothing has ever been installed.
+        canvas = tonumber(PUI.Config and PUI.Config.canvas) or Layouts.CANVAS_HEIGHT,
         -- Put each module back to its own defaults before the layout goes on.
         --
         -- On by default, because the thing people mean by "run the installer
@@ -131,6 +152,7 @@ end
 --------------------------------------------------------------------------------
 function Installer:Preview(choices)
     local layout = Layouts:Get(choices.layout)
+    local overrides = self:OverridesFor(choices)
     local lines = {}
 
     for _, module in ipairs(Modules:OfRole("display")) do
@@ -160,7 +182,7 @@ function Installer:Preview(choices)
                     ok = false,
                 }
             else
-                local has = layout and layout.overrides and layout.overrides[module.key]
+                local has = overrides[module.key] ~= nil
                 local detail
                 if choices.resetFirst and has then
                     detail = "reset, then styled for " .. layout.name
@@ -179,6 +201,33 @@ function Installer:Preview(choices)
                 }
             end
         end
+    end
+
+    -- Interface size gets its own row rather than hiding inside the Scaler's. It
+    -- is the one thing in the summary that changes how big everything else on
+    -- the list comes out, and "Scaler: reset, then styled for Standard" says
+    -- none of that. Only when a layout is going on: keeping your current setup
+    -- writes no positions, so there is no canvas to draw them for.
+    if choices.layout ~= Layouts.CURRENT then
+        local canvas = tonumber(choices.canvas) or Layouts.CANVAS_HEIGHT
+        local size = Layouts:SizeLabel(canvas)
+        local scaler = Modules.byKey.scaler
+        local detail, ok
+
+        if not Modules:IsAvailable(scaler) then
+            detail = "PeaversScaler is not running, so the layout is placed for " ..
+                     size .. " and drawn at whatever scale you are on"
+        elseif not choices.modules[scaler.key] then
+            detail = "Scaler switched off, so the layout is placed for " .. size ..
+                     " and drawn at whatever scale you are on"
+        elseif canvas == Layouts.CANVAS_HEIGHT then
+            detail, ok = size .. " - the size the layouts were drawn at", true
+        else
+            detail, ok = size .. " of the size the layouts were drawn at, on a canvas " ..
+                math.floor(canvas + 0.5) .. " units tall", true
+        end
+
+        lines[#lines + 1] = { label = "Interface size", detail = detail, ok = ok or false }
     end
 
     local performance = Modules.byKey.performance
@@ -263,8 +312,9 @@ function Installer:Apply(choices)
     -- Keeping the current setup applies no layout at all: nothing is reset and
     -- no override is written, whatever the reset box says.
     local keepCurrent = choices.layout == Layouts.CURRENT
-    local layout = not keepCurrent and (Layouts:Get(choices.layout) or Layouts:Get("standard")) or nil
-    local overrides = layout and layout.overrides or {}
+    local layoutKey = not keepCurrent and (Layouts:Get(choices.layout) and choices.layout or "standard") or nil
+    -- Drawn for the chosen interface size, not as shipped. See Layouts:OverridesFor.
+    local overrides = layoutKey and Layouts:OverridesFor(layoutKey, choices.canvas) or {}
 
     -- Drain anything left over from an earlier run so the report only ever
     -- describes this one.

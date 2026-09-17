@@ -34,6 +34,12 @@ local PUI_DEFAULTS = {
     layout = "standard",
     graphicsPreset = "none",
 
+    -- The canvas height, in UI units, the layout was drawn for - the installer's
+    -- interface size question. nil means never asked, which everything reads as
+    -- Layouts.CANVAS_HEIGHT: an install made before sizes existed is at the size
+    -- the pack was drawn at, and must stay there until somebody says otherwise.
+    canvas = nil,
+
     -- The revision of `layout` that was applied, and whether pack updates may
     -- apply newer ones. Pinned unless the player chose otherwise, every time.
     layoutRevision = nil,
@@ -101,6 +107,7 @@ function PUI.Config:MarkInstalled(choices)
     if choices then
         self.layout = choices.layout or self.layout
         self.graphicsPreset = choices.graphicsPreset or self.graphicsPreset
+        self.canvas = tonumber(choices.canvas) or self.canvas
 
         local layout = PUI.Layouts and PUI.Layouts:Get(self.layout)
         self.layoutRevision = layout and layout.revision or nil
