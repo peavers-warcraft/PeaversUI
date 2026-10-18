@@ -340,6 +340,37 @@ Modules.list = {
         end,
     },
     {
+        key = "consumablebar",
+        folder = "PeaversConsumableBar",
+        label = "Consumable Bar",
+        role = "display",
+        blurb = "The flasks, food and oils already in your bags, on one bar before a pull.",
+        slash = "/pcbar",
+
+        IsEnabled = function(_, ref)
+            return ref.Config and ref.Config.enabled == true
+        end,
+
+        -- Everything goes through Core:ApplyConfig rather than touching the bar
+        -- directly, and that is not tidiness. The buttons on it are secure
+        -- frames: resizing one, re-anchoring one, or showing and hiding the bar
+        -- are all refused mid-fight, and ApplyConfig is the function that knows
+        -- to hold the change until combat ends. Reaching past it would work
+        -- perfectly in a capital city and silently do nothing in a raid.
+        SetEnabled = function(_, ref, on)
+            if not ref.Config then return end
+            ref.Config.enabled = on
+            Call(ref, "Config:Save")
+            Call(ref, "Core:ApplyConfig")
+        end,
+
+        Refresh = function(_, ref)
+            if ref.Config and ref.Config.enabled then
+                Call(ref, "Core:ApplyConfig")
+            end
+        end,
+    },
+    {
         key = "scaler",
         folder = "PeaversScaler",
         label = "Scaler",

@@ -227,6 +227,80 @@ local HOUSE_TOOLTIP = {
 }
 
 --------------------------------------------------------------------------------
+-- The consumable bar, shared by every layout for the same reason chat is
+--
+-- Transcribed from the author's live install, like the Peavers UI layout itself.
+-- Where it sits is a consequence of what it is for: the bar you read in the
+-- thirty seconds before a pull, so it goes just above the left end of the action
+-- bars, under the unit frame row, where the eye already is while buffing.
+--
+-- Three things make it quiet rather than another row of icons to ignore:
+-- `fadeAlpha` holds it at a tenth until the cursor is on it, the stack counts
+-- and cooldown numbers are off because a flask is either there or it is not, and
+-- the quality colouring is off so twelve buttons read as one strip instead of
+-- twelve differently-outlined squares.
+--
+-- WHAT IS DELIBERATELY NOT HERE: the author's `overrides` table. Those are
+-- per-item "always show this / never show that" decisions about the exact items
+-- that were in one person's bags on one evening. Shipping them would pin a few
+-- arbitrary item IDs on or off in everybody's config - including items they do
+-- not own, which is a setting that can never explain itself - and the categories
+-- below already express the intent the overrides were correcting.
+--
+-- Fonts and bar textures are absent for the reason given at the top of this
+-- file: PeaversCommons bundles both and every module falls back to them.
+--------------------------------------------------------------------------------
+
+local HOUSE_CONSUMABLE_BAR = {
+        enabled = true,
+
+        -- Smaller and flush. 28px with no gap makes the row read as one strip
+        -- of consumables rather than as twelve separate action buttons, which
+        -- is the point: it is a checklist, not a bar you keybind.
+        buttonSize = 28,
+        buttonSpacing = 0,
+        buttonsPerLine = 12,
+
+        -- Transcribed as set, and worth a note because the pair looks odd: the
+        -- frame sizes itself to its buttons and keeps its BOTTOMLEFT corner
+        -- fixed, while growing left right-aligns the buttons inside it. So the
+        -- strip's right-hand end is what stays put as the bag contents change.
+        -- That is what was on screen, and it is the end nearest the middle of
+        -- the screen - the one worth keeping still.
+        growX = "LEFT",
+        growY = "DOWN",
+
+        -- Above the left end of the action bars and below the unit frame row:
+        -- 261 units up from the bottom of the 1440-unit canvas against the row
+        -- at 325. Anchored from the corner it is nearest, so it scales with the
+        -- canvas like every other position here.
+        framePoint = "BOTTOMLEFT",
+        frameRelativePoint = "BOTTOMLEFT",
+        frameX = 293,
+        frameY = 261,
+
+        -- Faded to a tenth until the cursor is on it. A pre-pull bar wants to
+        -- be findable and not worth looking at the rest of the time.
+        fadeAlpha = 0.1,
+
+        -- All three off. The icon says what the consumable is; a count and a
+        -- cooldown sweep on top of it are numbers nobody reads while buffing,
+        -- and quality borders turn one strip into twelve outlined squares.
+        showCount = false,
+        showCooldownText = false,
+        colorByQuality = false,
+        -- Which is what makes this the colour that is actually drawn: with
+        -- quality colouring off every border takes this one, and black is the
+        -- same edge the unit frames and the chat window are painted with.
+        borderColor = { r = 0, g = 0, b = 0 },
+
+        -- Elixirs on top of the four categories the addon ships on. The rest -
+        -- bandages, scrolls, augment runes and the long tail - stay off, which
+        -- is what keeps this twelve buttons instead of forty.
+        showElixir = true,
+}
+
+--------------------------------------------------------------------------------
 -- Bar styling, asked once rather than decided by the layout
 --
 -- Whether a health bar carries the class colour or a flat one has nothing to do
@@ -456,6 +530,7 @@ Layouts.list = {
             },
             chat = HOUSE_CHAT,
             tooltip = HOUSE_TOOLTIP,
+            consumablebar = HOUSE_CONSUMABLE_BAR,
             castbar = {
                 -- Transcribed with the rest of Standard. The player's bar takes
                 -- the Cooldown Manager's width and parks under it, which is why
@@ -671,6 +746,7 @@ Layouts.list = {
             },
             chat = HOUSE_CHAT,
             tooltip = HOUSE_TOOLTIP,
+            consumablebar = HOUSE_CONSUMABLE_BAR,
             castbar = {
                 -- The player's bar goes where Blizzard has always drawn it:
                 -- centred, a little below the middle of the screen, nowhere near
@@ -838,6 +914,7 @@ Layouts.list = {
             },
             chat = HOUSE_CHAT,
             tooltip = HOUSE_TOOLTIP,
+            consumablebar = HOUSE_CONSUMABLE_BAR,
             castbar = {
                 -- Under the player frame rather than out in the middle: the
                 -- frames are already low and central here, so a bar in the
@@ -912,6 +989,12 @@ Layouts.list = {
 -- Only the edge-anchored things move. The unit frames and cast bars are placed
 -- from the centre of the screen and have no edge to be held off - insetting them
 -- would just be a different layout, not the same one with a margin.
+--
+-- The consumable bar is anchored to a corner but is not one of them. It already
+-- sits 293 units in from the left and 261 up from the bottom - a margin nearly
+-- six times the one this layout is about - so there is no edge for it to be held
+-- off. Pushing it further in would move it out from under the unit frame row it
+-- is placed against, which is the one relationship that matters to it.
 --
 -- The system bars are not listed and do not need to be: they are docked to the
 -- minimap by the loop below, which runs after this and reads the offsets set
@@ -1327,6 +1410,10 @@ local POSITIONAL = {
     minimap    = { "offsetX", "offsetY" },
     chat       = { "chatX", "chatY" },
     tooltip    = { "anchorX", "anchorY" },
+    -- The offsets, not buttonSize: the strip stays the same number of UI units
+    -- tall at every interface size, like every frame width in this file, and
+    -- only where it sits moves with the canvas.
+    consumablebar = { "frameX", "frameY" },
     -- systembars is deliberately absent. Its position is derived from the
     -- minimap's by DockSystemBars, re-run below once the minimap block has been
     -- scaled; scaling it here too would apply the factor twice and undock the
@@ -1422,6 +1509,7 @@ end
 
 local BLACK_CHAT = "Chat window painted the same flat black as the unit frames."
 local CAST_BARS = "Cast bars are part of the pack now: PeaversCastBar is installed and arranged with everything else."
+local CONSUMABLE_BAR = "The consumable bar is part of the pack now: PeaversConsumableBar is placed above the left end of the action bars, faded until you point at it."
 
 -- Peavers UI keeps Standard's history unbroken, and gains no revision for the
 -- rename. The rule above is that a revision means somebody's screen looks
@@ -1433,10 +1521,11 @@ Layouts.changelog = {
               "1440p so positions match on any screen.",
         [3] = BLACK_CHAT,
         [4] = CAST_BARS .. " The chat window sits a little higher.",
+        [5] = CONSUMABLE_BAR,
     },
-    traditional = { [1] = "First release." },
-    modern      = { [1] = "First release." },
-    inset       = { [1] = "First release." },
+    traditional = { [1] = "First release.", [2] = CONSUMABLE_BAR },
+    modern      = { [1] = "First release.", [2] = CONSUMABLE_BAR },
+    inset       = { [1] = "First release.", [2] = CONSUMABLE_BAR },
 }
 
 for key, layout in pairs(Layouts.list) do
