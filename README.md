@@ -36,6 +36,7 @@ The installer's **More stuff** page lists these and others, tells you which you 
 | [PeaversChat](https://github.com/peavers-warcraft/PeaversChat) | The chat window, flat, with text tabs and a copy button |
 | [PeaversToolTip](https://github.com/peavers-warcraft/PeaversToolTip) | Tooltips, with the border carrying item quality or unit reaction |
 | [PeaversSystemBars](https://github.com/peavers-warcraft/PeaversSystemBars) | FPS and latency, as bars rather than a number in a menu |
+| [PeaversConsumableBar](https://github.com/peavers-warcraft/PeaversConsumableBar) | The flasks, food and oils in your bags, on one bar before a pull |
 | [PeaversScaler](https://github.com/peavers-warcraft/PeaversScaler) | The UI scale the layouts are drawn at |
 | [PeaversPerformance](https://github.com/peavers-warcraft/PeaversPerformance) | Graphics presets, every CVar snapshotted before it is touched |
 | [PeaversCommons](https://github.com/peavers-warcraft/PeaversCommons) | The shared library the rest are built on |

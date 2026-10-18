@@ -423,6 +423,37 @@ end
 _G.PeaversCastBar = PCB
 _G.PeaversCommons.ConfigRegistry:Register({ name = "PeaversCastBar", addonRef = PCB })
 
+-- PeaversConsumableBar. A flat config like the minimap's, and a Core:ApplyConfig
+-- that stands in for the one function the pack is allowed to call: the buttons on
+-- that bar are secure frames, so every change has to go through the function that
+-- knows to hold it until combat ends.
+local PCBAR = {
+    Config = FakeConfig({
+        enabled = true,
+        buttonSize = 36, buttonSpacing = 2, buttonsPerLine = 12,
+        orientation = "horizontal", growX = "RIGHT", growY = "DOWN",
+        framePoint = "BOTTOM", frameRelativePoint = "BOTTOM",
+        frameX = 0, frameY = 240,
+        visibility = "outOfCombat", hideWhenEmpty = true, sortMode = "category",
+        maxButtons = 24, minQuality = 1, hideConjured = false,
+        barAlpha = 1, fadeAlpha = 1, showFrameBackground = false,
+        showCount = true, showCooldownText = true, colorByQuality = true,
+        borderColor = { r = 0, g = 0, b = 0 }, borderAlpha = 1,
+        frameStrata = "MEDIUM",
+        -- itemID -> true/false. Free-form by nature, and no layout may write
+        -- one - see the assertion further down.
+        overrides = {},
+        -- One key per category, built the way Categories.ConfigKey builds them.
+        showFlask = true, showPotion = true, showFood = true,
+        showEnhancement = true, showElixir = false, showBandage = false,
+        showScroll = false, showOther = false,
+    }),
+    Core = { configApplied = 0 },
+}
+function PCBAR.Core:ApplyConfig() Hop() self.configApplied = self.configApplied + 1 end
+_G.PeaversConsumableBar = PCBAR
+_G.PeaversCommons.ConfigRegistry:Register({ name = "PeaversConsumableBar", addonRef = PCBAR })
+
 -- PeaversChat is deliberately absent: nothing is put in _G for it, and
 -- GetAddOnInfo above returns nil for it, so the case covers a module that is not
 -- installed at all rather than only the happy path.
@@ -479,6 +510,7 @@ local KNOWN = {
     systembars = PSB.Config,
     scaler = PSC.Config,
     castbar = PCB.Config,
+    consumablebar = PCBAR.Config,
     -- PeaversChat is not loaded in this case, so its keys are listed rather
     -- than read off a live config. Transcribed from PeaversChat/src/Utils/Config.lua,
     -- and merged over COMMON_DEFAULTS below the same way a real config is.
@@ -618,6 +650,29 @@ for _, entry in ipairs(Layouts:Sorted()) do
         entry.key .. " must not write PeaversChat's one-time migration flag")
     assert(chat.bgColor and chat.bgColor.r == 0 and chat.bgColor.g == 0 and chat.bgColor.b == 0,
         entry.key .. " chat should be painted the same flat black as the unit frames")
+end
+
+-- The consumable bar is the author's own, in every layout, and must never carry
+-- the author's own *items*. The `overrides` table is per-item "always show this,
+-- never show that" decisions about whatever was in one person's bags on one
+-- evening; shipped, they would pin a handful of arbitrary item IDs on or off in
+-- everybody's config, including items they do not own.
+for _, entry in ipairs(Layouts:Sorted()) do
+    local bar = entry.layout.overrides.consumablebar
+    assert(bar, entry.key .. " must configure the consumable bar")
+    assert(bar.overrides == nil,
+        entry.key .. " must not ship per-item consumable overrides")
+    assert(bar.fadeAlpha and bar.fadeAlpha < 1,
+        entry.key .. " consumable bar should fade until the cursor is on it")
+    assert(bar.colorByQuality == false,
+        entry.key .. " consumable bar should read as one strip, not twelve outlined squares")
+    assert(bar.borderColor and bar.borderColor.r == 0 and bar.borderColor.g == 0
+        and bar.borderColor.b == 0,
+        entry.key .. " consumable bar borders should be the same flat black as everything else")
+    -- Media is the collection's, never named here - the rule at the top of
+    -- Layouts.lua, asserted from the one block most likely to forget it.
+    assert(bar.fontFace == nil and bar.barTexture == nil,
+        entry.key .. " consumable bar must not name a font or a texture")
 end
 
 -- The transcription still holds: Peavers UI derives to exactly what was on screen.
@@ -981,7 +1036,7 @@ local installHops = hops
 
 assert(#result.failures == 0, "install reported failures: " .. table.concat(result.failures, "; "))
 assert(#result.skipped == 1 and result.skipped[1] == "Chat", "Chat should be the only skipped module")
-assert(#result.applied == 6, "expected six modules configured, got " .. #result.applied)
+assert(#result.applied == 7, "expected seven modules configured, got " .. #result.applied)
 
 -- The canvas went on with the layout. Enable is what records the player's own
 -- scale, so it has to have run - and before the reset could discard anything.
@@ -1021,6 +1076,22 @@ assert(PTT.Config.healthBar == false, "tooltip health bar should be off in Peave
 assert(PSB.Config.framePoint == "TOPRIGHT" and PSB.Core.frame.shown == true, "system bars not configured")
 assert(PSB.Config.barSpacing == -1, "system bar overlap not written")
 assert(PSB.Config.customColors.FPS.g == 0.408, "system bar FPS colour not written")
+
+-- The consumable bar went on, positioned and faded, and the per-item overrides
+-- it already held were left alone - the layout says nothing about them, so the
+-- deep merge must not have reached in.
+assert(PCBAR.Config.enabled == true, "the consumable bar should be on after an install")
+assert(PCBAR.Config.frameX == 293 and PCBAR.Config.frameY == 261,
+    "consumable bar position not written, got "
+    .. tostring(PCBAR.Config.frameX) .. "," .. tostring(PCBAR.Config.frameY))
+assert(PCBAR.Config.buttonSize == 28 and PCBAR.Config.buttonSpacing == 0,
+    "consumable bar buttons not written")
+assert(PCBAR.Config.fadeAlpha == 0.1, "consumable bar fade not written")
+assert(PCBAR.Config.showElixir == true, "elixirs should be switched on by the layout")
+assert(PCBAR.Config.showScroll == false, "scrolls should be left off")
+assert(next(PCBAR.Config.overrides) == nil,
+    "the install must not write per-item consumable overrides")
+assert(PCBAR.Core.configApplied >= 1, "the consumable bar was never told to re-apply")
 
 -- Deep merge kept the siblings the layout said nothing about. bgAlpha and
 -- auraSpacing are good probes precisely because no layout mentions them.
@@ -2018,7 +2089,7 @@ local idle = Stubs.Drive(function() end, 144, 1 / 144)
 
 return {
     {
-        name = "installing the pack, six modules and a graphics preset",
+        name = "installing the pack, seven modules and a graphics preset",
         callsPerFrame = 0,
         idleCallsPerSecond = 0,
         notes = installHops .. " calls into the module addons for the whole install, " ..
